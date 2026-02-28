@@ -1,0 +1,10 @@
+{
+  "name": "@coastal-eats/web-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@coastal-eats/web"
+    ]
+  }
+}
