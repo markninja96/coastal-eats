@@ -25,15 +25,15 @@ jobs:
       # Connect your workspace by running "nx connect" and uncomment this line to enable task distribution
       # - run: npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="build"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
       # Cache pnpm store
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
 
       - run: pnpm install --frozen-lockfile
 
