@@ -44,3 +44,11 @@ Thumbs.db
 test-output
 
 vite.config.*.timestamp*
+
+# env
+.env
+.env.*
+!.env.example
+
+# local docs
+AGENT.md
