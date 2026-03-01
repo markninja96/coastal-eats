@@ -31,6 +31,9 @@ export function InlineAlert({
         'flex flex-col gap-3 rounded-2xl border border-white/15 bg-sand/70 p-4 text-sm text-ink/80',
         className,
       )}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
       {...props}
     >
       <div className="flex items-start gap-3">

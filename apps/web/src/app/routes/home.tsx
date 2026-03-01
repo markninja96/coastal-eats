@@ -27,6 +27,9 @@ const stats = [
   },
 ];
 
+const SITE_LIST = ['Seattle waterfront', 'Portland Pearl', 'Miami Beach'];
+const OVERTIME_NAMES = ['Sarah Chen', 'John Rivera', 'Maria Santos'];
+
 export function HomeRoute() {
   return (
     <div className="space-y-8">
@@ -64,20 +67,18 @@ export function HomeRoute() {
             </Button>
           </CardHeader>
           <CardBody className="mt-6 grid gap-4">
-            {['Seattle waterfront', 'Portland Pearl', 'Miami Beach'].map(
-              (site) => (
-                <div
-                  key={site}
-                  className="flex items-center justify-between rounded-2xl bg-sand/70 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{site}</p>
-                    <p className="text-xs text-ink/60">1 bartender short</p>
-                  </div>
-                  <Badge variant="accent">High risk</Badge>
+            {SITE_LIST.map((site) => (
+              <div
+                key={site}
+                className="flex items-center justify-between rounded-2xl bg-sand/70 px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-ink">{site}</p>
+                  <p className="text-xs text-ink/60">1 bartender short</p>
                 </div>
-              ),
-            )}
+                <Badge variant="accent">High risk</Badge>
+              </div>
+            ))}
           </CardBody>
         </Card>
 
@@ -95,7 +96,7 @@ export function HomeRoute() {
             </p>
           </CardHeader>
           <CardBody className="mt-6 space-y-3">
-            {['Sarah Chen', 'John Rivera', 'Maria Santos'].map((name) => (
+            {OVERTIME_NAMES.map((name) => (
               <div
                 key={name}
                 className="flex items-center justify-between text-sm"

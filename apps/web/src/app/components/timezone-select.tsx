@@ -19,24 +19,27 @@ function getTimezones(): string[] {
   return fallbackTimezones;
 }
 
-type TimezoneSelectProps = {
+type TimezoneSelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   value?: string;
   onChange?: (value: string) => void;
-  className?: string;
 };
 
-export function TimezoneSelect({
-  value,
-  onChange,
-  className,
-}: TimezoneSelectProps) {
+export function TimezoneSelect(props: TimezoneSelectProps) {
+  const { value, className, ...rest } = props;
+  const onValueChange = props.onChange;
+  const nativeOnChange =
+    rest.onChange as React.SelectHTMLAttributes<HTMLSelectElement>['onChange'];
   const [timezones] = React.useState(() => getTimezones());
 
   return (
     <Select
       className={className}
       value={value}
-      onChange={(event) => onChange?.(event.target.value)}
+      onChange={(event) => {
+        nativeOnChange?.(event);
+        onValueChange?.(event.target.value);
+      }}
+      {...rest}
     >
       <option value="">Select timezone</option>
       {timezones.map((zone) => (

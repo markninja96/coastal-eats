@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { CalendarDays } from 'lucide-react';
 import { Badge } from '../components/badge';
 import { Button } from '../components/button';
@@ -11,6 +12,10 @@ import { Textarea } from '../components/textarea';
 import { TimezoneSelect } from '../components/timezone-select';
 
 export function ComponentsRoute() {
+  const shiftTitleId = React.useId();
+  const notesId = React.useId();
+  const timezoneId = React.useId();
+
   return (
     <div className="space-y-10">
       <PageHeader
@@ -91,9 +96,24 @@ export function ComponentsRoute() {
           <h2 className="font-display text-2xl">Form fields</h2>
         </CardHeader>
         <CardBody className="grid gap-4">
-          <Input placeholder="Shift title" />
-          <Textarea placeholder="Notes for the team" />
-          <TimezoneSelect />
+          <div className="grid gap-2">
+            <label htmlFor={shiftTitleId} className="text-sm text-ink/70">
+              Shift title
+            </label>
+            <Input id={shiftTitleId} placeholder="Shift title" />
+          </div>
+          <div className="grid gap-2">
+            <label htmlFor={notesId} className="text-sm text-ink/70">
+              Notes for the team
+            </label>
+            <Textarea id={notesId} placeholder="Notes for the team" />
+          </div>
+          <div className="grid gap-2">
+            <label htmlFor={timezoneId} className="text-sm text-ink/70">
+              Timezone
+            </label>
+            <TimezoneSelect id={timezoneId} />
+          </div>
         </CardBody>
       </Card>
 
