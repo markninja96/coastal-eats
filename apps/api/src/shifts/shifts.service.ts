@@ -1,17 +1,15 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { and, eq, gte, lte } from 'drizzle-orm';
+import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import { managerLocations, shifts } from '../db/schema';
-
-type AuthUser = {
-  id: string;
-  role: 'admin' | 'manager' | 'staff';
-};
+import type { AuthUser } from '../auth/auth.types';
 
 type ShiftInput = {
   locationId: string;
@@ -24,7 +22,7 @@ type ShiftInput = {
 
 @Injectable()
 export class ShiftsService {
-  constructor(private readonly database: typeof db) {}
+  constructor(@Inject(DB) private readonly database: typeof db) {}
 
   private async assertLocationAccess(user: AuthUser, locationId: string) {
     if (user.role === 'admin') return;
@@ -61,6 +59,9 @@ export class ShiftsService {
     user: AuthUser,
     params: { locationId?: string; start?: Date; end?: Date },
   ) {
+    if (user.role !== 'admin' && !params.locationId) {
+      throw new ForbiddenException('Location filter required');
+    }
     if (params.locationId) {
       await this.assertLocationAccess(user, params.locationId);
     }
@@ -117,6 +118,9 @@ export class ShiftsService {
     if (!existing) throw new NotFoundException('Shift not found');
 
     await this.assertLocationAccess(user, existing.locationId);
+    if (input.locationId && input.locationId !== existing.locationId) {
+      await this.assertLocationAccess(user, input.locationId);
+    }
     if (existing.status === 'published') {
       this.assertCutoff(existing.startAt);
     }

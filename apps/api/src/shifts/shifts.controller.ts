@@ -12,13 +12,10 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { JwtAuthGuard } from '../auth/jwt.guard';
+import type { AuthUser } from '../auth/auth.types';
 import { ShiftsService } from './shifts.service';
 
-type AuthUser = {
-  id: string;
-  role: 'admin' | 'manager' | 'staff';
-};
-
+const idSchema = z.string().uuid();
 const shiftInputSchema = z.object({
   locationId: z.string().uuid(),
   startAt: z.coerce.date(),
@@ -65,20 +62,32 @@ export class ShiftsController {
     @Param('id') id: string,
     @Body() body: unknown,
   ) {
+    const idParsed = idSchema.safeParse(id);
+    if (!idParsed.success) {
+      throw new BadRequestException('Invalid shift id');
+    }
     const parsed = shiftUpdateSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(parsed.error.flatten());
     }
-    return this.shiftsService.update(req.user, id, parsed.data);
+    return this.shiftsService.update(req.user, idParsed.data, parsed.data);
   }
 
   @Post(':id/publish')
   async publish(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.shiftsService.publish(req.user, id);
+    const idParsed = idSchema.safeParse(id);
+    if (!idParsed.success) {
+      throw new BadRequestException('Invalid shift id');
+    }
+    return this.shiftsService.publish(req.user, idParsed.data);
   }
 
   @Post(':id/unpublish')
   async unpublish(@Req() req: { user: AuthUser }, @Param('id') id: string) {
-    return this.shiftsService.unpublish(req.user, id);
+    const idParsed = idSchema.safeParse(id);
+    if (!idParsed.success) {
+      throw new BadRequestException('Invalid shift id');
+    }
+    return this.shiftsService.unpublish(req.user, idParsed.data);
   }
 }
