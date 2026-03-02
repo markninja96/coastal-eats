@@ -51,8 +51,19 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async me(@Req() req: { user: { sub: string } }) {
-    return this.authService.profile(req.user.sub);
+  async me(
+    @Req()
+    req: {
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        homeTimezone: string;
+      };
+    },
+  ) {
+    return req.user;
   }
 
   @Post('register')
