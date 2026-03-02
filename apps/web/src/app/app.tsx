@@ -19,6 +19,30 @@ export function AppLayout() {
               Overview
             </Link>
             <Link
+              to="/schedule"
+              className="rounded-full px-3 py-1.5 hover:bg-white/15"
+            >
+              Schedule
+            </Link>
+            <Link
+              to="/swaps"
+              className="rounded-full px-3 py-1.5 hover:bg-white/15"
+            >
+              Swaps
+            </Link>
+            <Link
+              to="/compliance"
+              className="rounded-full px-3 py-1.5 hover:bg-white/15"
+            >
+              Compliance
+            </Link>
+            <Link
+              to="/fairness"
+              className="rounded-full px-3 py-1.5 hover:bg-white/15"
+            >
+              Fairness
+            </Link>
+            <Link
               to="/components"
               className="rounded-full px-3 py-1.5 hover:bg-white/15"
             >
