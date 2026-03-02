@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { cn } from '../lib/cn';
 import { Button } from './button';
 
 type ApprovalActionsProps = {
@@ -13,10 +14,11 @@ export function ApprovalActions({
   onReject,
   approveLabel = 'Approve',
   rejectLabel = 'Reject',
+  className,
   ...props
 }: ApprovalActionsProps) {
   return (
-    <div className="flex flex-wrap gap-2" {...props}>
+    <div className={cn('flex flex-wrap gap-2', className)} {...props}>
       <Button size="sm" onClick={onApprove}>
         {approveLabel}
       </Button>

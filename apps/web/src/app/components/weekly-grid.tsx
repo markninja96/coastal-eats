@@ -27,7 +27,12 @@ export function WeeklyGrid({
       className={cn('rounded-3xl border border-white/15 bg-mist/90', className)}
       {...props}
     >
-      <div className="grid grid-cols-6 gap-px border-b border-white/10 text-xs text-ink/60">
+      <div
+        className="grid gap-px border-b border-white/10 text-xs text-ink/60"
+        style={{
+          gridTemplateColumns: `repeat(${days.length + 1}, minmax(0, 1fr))`,
+        }}
+      >
         <div className="p-3">Time</div>
         {days.map((day) => (
           <div key={day} className="p-3 text-center font-medium text-ink/70">
@@ -35,7 +40,12 @@ export function WeeklyGrid({
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-6 gap-px">
+      <div
+        className="grid gap-px"
+        style={{
+          gridTemplateColumns: `repeat(${days.length + 1}, minmax(0, 1fr))`,
+        }}
+      >
         <div className="space-y-6 p-4 text-xs text-ink/50">
           {['8 AM', '12 PM', '4 PM', '8 PM'].map((label) => (
             <div key={label}>{label}</div>

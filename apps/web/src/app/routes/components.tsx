@@ -140,143 +140,179 @@ export function ComponentsRoute() {
         </CardBody>
       </Card>
 
-      <ShiftCard
-        title="Bartender coverage"
-        timeRange="Fri, 4:00 PM - 12:00 AM"
-        location="Seattle waterfront"
-        headcount="2 of 3 filled"
-        status="published"
-        assignments={[
-          { name: 'Sarah Chen', role: 'Lead', status: 'assigned' },
-          { name: 'John Rivera', role: 'Backup', status: 'pending' },
-          { name: 'Open slot', status: 'swap' },
-        ]}
-        actions={<Button size="sm">Assign</Button>}
-      />
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-display text-2xl">Weekly grid</h2>
-        </CardHeader>
-        <CardBody>
-          <WeeklyGrid
-            days={['Mon', 'Tue', 'Wed', 'Thu', 'Fri']}
-            shifts={[
-              {
-                id: '1',
-                day: 'Mon',
-                start: '10 AM',
-                end: '4 PM',
-                title: 'Line cook',
-                status: 'published',
-              },
-              {
-                id: '2',
-                day: 'Wed',
-                start: '2 PM',
-                end: '10 PM',
-                title: 'Bartender',
-                meta: '2 of 3 filled',
-                status: 'draft',
-              },
-              {
-                id: '3',
-                day: 'Fri',
-                start: '4 PM',
-                end: '11 PM',
-                title: 'Server',
-                meta: 'Overtime risk',
-                status: 'published',
-              },
-            ]}
-          />
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-display text-2xl">Availability + conflicts</h2>
-        </CardHeader>
-        <CardBody className="grid gap-4">
-          <div className="flex flex-wrap gap-2">
-            <AvailabilityBadge status="available" label="Available" />
-            <AvailabilityBadge status="partial" label="Partial" />
-            <AvailabilityBadge status="unavailable" label="Unavailable" />
-          </div>
-          <ConflictBanner
-            title="Sarah Chen is unavailable"
-            description="This shift falls outside the staff member's availability window."
-            rule="Availability"
-            suggestions={[
-              { name: 'John Rivera', detail: 'Server · Available' },
-              { name: 'Maria Santos', detail: 'Server · Certified' },
-            ]}
-          />
-        </CardBody>
-      </Card>
-
-      <SwapRequestCard
-        requester="Sarah Chen"
-        shift="Fri, 4:00 PM - 12:00 AM · Seattle waterfront"
-        status="pending"
-        type="swap"
-        expiresIn="22h"
-        note="Doctor appointment. Can swap with another server."
-        actions={<ApprovalActions />}
-      />
-
-      <Card>
-        <CardHeader>
-          <h2 className="font-display text-2xl">Compliance + fairness</h2>
-        </CardHeader>
-        <CardBody className="grid gap-6 md:grid-cols-2">
-          <OvertimeMeter label="Projected hours" hours={38} limit={40} />
-          <FairnessScore score={82} />
-          <HoursBar assigned={28} desired={32} />
-          <div className="flex items-center gap-2">
-            <PremiumShiftTag />
-            <span className="text-sm text-ink/60">Friday 7pm - 11pm</span>
-          </div>
-        </CardBody>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <h2 className="font-display text-2xl">Notifications + presence</h2>
-          <LiveIndicator />
-        </CardHeader>
-        <CardBody className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-3">
-            <NotificationItem
-              title="Swap approved"
-              body="John Rivera accepted the Friday shift."
-              time="2m ago"
-              unread
-            />
-            <NotificationItem
-              title="Overtime warning"
-              body="Maria Santos is projected to hit 41 hours."
-              time="1h ago"
-            />
-          </div>
-          <PresenceList
-            items={[
-              { name: 'Devon Blake', role: 'Host', location: 'Miami Beach' },
-              {
-                name: 'John Rivera',
-                role: 'Server',
-                location: 'Seattle waterfront',
-              },
-            ]}
-          />
-        </CardBody>
-      </Card>
-
-      <EmptyState
-        title="No swap requests"
-        description="Staff haven’t submitted any swap or drop requests yet."
-        action={<Button size="sm">Invite staff</Button>}
-      />
+      <ShiftDemo />
+      <WeeklyGridDemo />
+      <AvailabilityDemo />
+      <SwapRequestDemo />
+      <ComplianceDemo />
+      <NotificationsDemo />
+      <EmptyStateDemo />
     </div>
+  );
+}
+
+function ShiftDemo() {
+  return (
+    <ShiftCard
+      title="Bartender coverage"
+      timeRange="Fri, 4:00 PM - 12:00 AM"
+      location="Seattle waterfront"
+      headcount="2 of 3 filled"
+      status="published"
+      assignments={[
+        { name: 'Sarah Chen', role: 'Lead', status: 'assigned' },
+        { name: 'John Rivera', role: 'Backup', status: 'pending' },
+        { name: 'Open slot', status: 'swap' },
+      ]}
+      actions={<Button size="sm">Assign</Button>}
+    />
+  );
+}
+
+function WeeklyGridDemo() {
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="font-display text-2xl">Weekly grid</h2>
+      </CardHeader>
+      <CardBody>
+        <WeeklyGrid
+          days={['Mon', 'Tue', 'Wed', 'Thu', 'Fri']}
+          shifts={[
+            {
+              id: '1',
+              day: 'Mon',
+              start: '10 AM',
+              end: '4 PM',
+              title: 'Line cook',
+              status: 'published',
+            },
+            {
+              id: '2',
+              day: 'Wed',
+              start: '2 PM',
+              end: '10 PM',
+              title: 'Bartender',
+              meta: '2 of 3 filled',
+              status: 'draft',
+            },
+            {
+              id: '3',
+              day: 'Fri',
+              start: '4 PM',
+              end: '11 PM',
+              title: 'Server',
+              meta: 'Overtime risk',
+              status: 'published',
+            },
+          ]}
+        />
+      </CardBody>
+    </Card>
+  );
+}
+
+function AvailabilityDemo() {
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="font-display text-2xl">Availability + conflicts</h2>
+      </CardHeader>
+      <CardBody className="grid gap-4">
+        <div className="flex flex-wrap gap-2">
+          <AvailabilityBadge status="available" label="Available" />
+          <AvailabilityBadge status="partial" label="Partial" />
+          <AvailabilityBadge status="unavailable" label="Unavailable" />
+        </div>
+        <ConflictBanner
+          title="Sarah Chen is unavailable"
+          description="This shift falls outside the staff member's availability window."
+          rule="Availability"
+          suggestions={[
+            { name: 'John Rivera', detail: 'Server · Available' },
+            { name: 'Maria Santos', detail: 'Server · Certified' },
+          ]}
+        />
+      </CardBody>
+    </Card>
+  );
+}
+
+function SwapRequestDemo() {
+  return (
+    <SwapRequestCard
+      requester="Sarah Chen"
+      shift="Fri, 4:00 PM - 12:00 AM · Seattle waterfront"
+      status="pending"
+      type="swap"
+      expiresIn="22h"
+      note="Doctor appointment. Can swap with another server."
+      actions={<ApprovalActions />}
+    />
+  );
+}
+
+function ComplianceDemo() {
+  return (
+    <Card>
+      <CardHeader>
+        <h2 className="font-display text-2xl">Compliance + fairness</h2>
+      </CardHeader>
+      <CardBody className="grid gap-6 md:grid-cols-2">
+        <OvertimeMeter label="Projected hours" hours={38} limit={40} />
+        <FairnessScore score={82} />
+        <HoursBar assigned={28} desired={32} />
+        <div className="flex items-center gap-2">
+          <PremiumShiftTag />
+          <span className="text-sm text-ink/60">Friday 7pm - 11pm</span>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function NotificationsDemo() {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <h2 className="font-display text-2xl">Notifications + presence</h2>
+        <LiveIndicator />
+      </CardHeader>
+      <CardBody className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          <NotificationItem
+            title="Swap approved"
+            body="John Rivera accepted the Friday shift."
+            time="2m ago"
+            unread
+          />
+          <NotificationItem
+            title="Overtime warning"
+            body="Maria Santos is projected to hit 41 hours."
+            time="1h ago"
+          />
+        </div>
+        <PresenceList
+          items={[
+            { name: 'Devon Blake', role: 'Host', location: 'Miami Beach' },
+            {
+              name: 'John Rivera',
+              role: 'Server',
+              location: 'Seattle waterfront',
+            },
+          ]}
+        />
+      </CardBody>
+    </Card>
+  );
+}
+
+function EmptyStateDemo() {
+  return (
+    <EmptyState
+      title="No swap requests"
+      description="Staff haven’t submitted any swap or drop requests yet."
+      action={<Button size="sm">Invite staff</Button>}
+    />
   );
 }

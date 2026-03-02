@@ -22,13 +22,13 @@ export function HoursBar({
         <span>Assigned {assigned}h</span>
         <span>Desired {desired}h</span>
       </div>
-      <div className="h-2 w-full rounded-full bg-sand/60">
+      <div className="relative h-2 w-full rounded-full bg-sand/60">
         <div
-          className="h-2 rounded-full bg-coral/70"
+          className="absolute left-0 top-0 h-2 rounded-full bg-coral/70"
           style={{ width: `${desiredPercent}%` }}
         />
         <div
-          className="-mt-2 h-2 rounded-full bg-emerald-400/70"
+          className="absolute left-0 top-0 h-2 rounded-full bg-emerald-400/70"
           style={{ width: `${assignedPercent}%` }}
         />
       </div>

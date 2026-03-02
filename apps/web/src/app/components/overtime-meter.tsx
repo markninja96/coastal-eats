@@ -16,7 +16,8 @@ export function OvertimeMeter({
   className,
   ...props
 }: OvertimeMeterProps) {
-  const percent = Math.min(100, Math.round((hours / limit) * 100));
+  const percent =
+    limit > 0 ? Math.min(100, Math.round((hours / limit) * 100)) : 0;
   const tone =
     hours >= limit
       ? 'bg-coral'
