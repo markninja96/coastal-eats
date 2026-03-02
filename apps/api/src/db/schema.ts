@@ -37,6 +37,8 @@ export const users = pgTable('users', {
   role: userRole('role').notNull(),
   homeTimezone: text('home_timezone').notNull(),
   desiredWeeklyHours: integer('desired_weekly_hours'),
+  passwordHash: text('password_hash'),
+  googleId: text('google_id'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

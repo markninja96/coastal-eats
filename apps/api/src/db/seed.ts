@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { hashSync } from 'bcryptjs';
 import { db } from './db';
 import {
   auditLogs,
@@ -25,6 +26,8 @@ const addDays = (date: Date, days: number) =>
   new Date(date.getTime() + days * 24 * 3600 * 1000);
 
 async function seed() {
+  const passwordHash = hashSync('Password123!', 10);
+
   const locationRows = [
     {
       id: randomUUID(),
@@ -62,6 +65,7 @@ async function seed() {
     role: 'admin' as const,
     homeTimezone: 'America/Los_Angeles',
     desiredWeeklyHours: null,
+    passwordHash,
   };
 
   const managerSeattle = {
@@ -71,6 +75,7 @@ async function seed() {
     role: 'manager' as const,
     homeTimezone: 'America/Los_Angeles',
     desiredWeeklyHours: null,
+    passwordHash,
   };
 
   const managerMiami = {
@@ -80,6 +85,7 @@ async function seed() {
     role: 'manager' as const,
     homeTimezone: 'America/New_York',
     desiredWeeklyHours: null,
+    passwordHash,
   };
 
   const staff = [
@@ -90,6 +96,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/Los_Angeles',
       desiredWeeklyHours: 32,
+      passwordHash,
     },
     {
       id: randomUUID(),
@@ -98,6 +105,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/Los_Angeles',
       desiredWeeklyHours: 38,
+      passwordHash,
     },
     {
       id: randomUUID(),
@@ -106,6 +114,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/New_York',
       desiredWeeklyHours: 36,
+      passwordHash,
     },
     {
       id: randomUUID(),
@@ -114,6 +123,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/New_York',
       desiredWeeklyHours: 28,
+      passwordHash,
     },
   ];
 
