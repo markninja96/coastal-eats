@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { compareSync } from 'bcryptjs';
+import { compare } from 'bcryptjs';
 import type { Profile } from 'passport-google-oauth20';
 import { UsersService } from './users.service';
 
@@ -14,8 +14,13 @@ export class AuthService {
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user?.passwordHash) return null;
-    if (!compareSync(password, user.passwordHash)) return null;
-    return user;
+    try {
+      const matches = await compare(password, user.passwordHash);
+      if (!matches) return null;
+      return user;
+    } catch {
+      return null;
+    }
   }
 
   async login(userId: string) {
@@ -42,9 +47,17 @@ export class AuthService {
   }
 
   async handleGoogleProfile(profile: Profile) {
-    const email = profile.emails?.[0]?.value;
+    const email = profile.emails?.find((entry) => {
+      const verified = (
+        entry as { verified?: boolean; verified_email?: boolean }
+      ).verified;
+      const verifiedEmail = (
+        entry as { verified?: boolean; verified_email?: boolean }
+      ).verified_email;
+      return verified || verifiedEmail;
+    })?.value;
     if (!email) {
-      throw new UnauthorizedException('Google account missing email');
+      throw new UnauthorizedException('Google account missing verified email');
     }
 
     const name = profile.displayName || email;

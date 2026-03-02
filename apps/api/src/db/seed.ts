@@ -26,7 +26,7 @@ const addDays = (date: Date, days: number) =>
   new Date(date.getTime() + days * 24 * 3600 * 1000);
 
 async function seed() {
-  const passwordHash = hashSync('Password123!', 10);
+  const makePasswordHash = () => hashSync('Password123!', 10);
 
   const locationRows = [
     {
@@ -65,7 +65,7 @@ async function seed() {
     role: 'admin' as const,
     homeTimezone: 'America/Los_Angeles',
     desiredWeeklyHours: null,
-    passwordHash,
+    passwordHash: makePasswordHash(),
   };
 
   const managerSeattle = {
@@ -75,7 +75,7 @@ async function seed() {
     role: 'manager' as const,
     homeTimezone: 'America/Los_Angeles',
     desiredWeeklyHours: null,
-    passwordHash,
+    passwordHash: makePasswordHash(),
   };
 
   const managerMiami = {
@@ -85,7 +85,7 @@ async function seed() {
     role: 'manager' as const,
     homeTimezone: 'America/New_York',
     desiredWeeklyHours: null,
-    passwordHash,
+    passwordHash: makePasswordHash(),
   };
 
   const staff = [
@@ -96,7 +96,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/Los_Angeles',
       desiredWeeklyHours: 32,
-      passwordHash,
+      passwordHash: makePasswordHash(),
     },
     {
       id: randomUUID(),
@@ -105,7 +105,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/Los_Angeles',
       desiredWeeklyHours: 38,
-      passwordHash,
+      passwordHash: makePasswordHash(),
     },
     {
       id: randomUUID(),
@@ -114,7 +114,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/New_York',
       desiredWeeklyHours: 36,
-      passwordHash,
+      passwordHash: makePasswordHash(),
     },
     {
       id: randomUUID(),
@@ -123,7 +123,7 @@ async function seed() {
       role: 'staff' as const,
       homeTimezone: 'America/New_York',
       desiredWeeklyHours: 28,
-      passwordHash,
+      passwordHash: makePasswordHash(),
     },
   ];
 

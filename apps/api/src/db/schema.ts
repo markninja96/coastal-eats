@@ -4,6 +4,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  uniqueIndex,
   text,
   time,
   timestamp,
@@ -30,22 +31,29 @@ export const availabilityExceptionType = pgEnum('availability_exception_type', [
   'unavailable',
 ]);
 
-export const users = pgTable('users', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  email: text('email').notNull(),
-  name: text('name').notNull(),
-  role: userRole('role').notNull(),
-  homeTimezone: text('home_timezone').notNull(),
-  desiredWeeklyHours: integer('desired_weekly_hours'),
-  passwordHash: text('password_hash'),
-  googleId: text('google_id'),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    email: text('email').notNull(),
+    name: text('name').notNull(),
+    role: userRole('role').notNull(),
+    homeTimezone: text('home_timezone').notNull(),
+    desiredWeeklyHours: integer('desired_weekly_hours'),
+    passwordHash: text('password_hash'),
+    googleId: text('google_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    emailUnique: uniqueIndex('uq_users_email').on(table.email),
+    googleIdUnique: uniqueIndex('uq_users_google_id').on(table.googleId),
+  }),
+);
 
 export const locations = pgTable('locations', {
   id: uuid('id').defaultRandom().primaryKey(),

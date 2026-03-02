@@ -7,9 +7,9 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { z } from 'zod';
 import { AuthService } from './auth.service';
+import { GoogleAuthGuard } from './google.guard';
 import { JwtAuthGuard } from './jwt.guard';
 
 const loginSchema = z.object({
@@ -50,13 +50,13 @@ export class AuthController {
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuth() {
     return;
   }
 
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleCallback(@Req() req: { user: { id: string } }) {
     return this.authService.login(req.user.id);
   }

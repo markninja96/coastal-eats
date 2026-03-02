@@ -33,12 +33,11 @@ Note: Drizzle config reads `DATABASE_URL` from the environment.
 - Google OAuth: `GET /api/auth/google` and callback at `/api/auth/google/callback`.
 - Current user: `GET /api/auth/me` with `Authorization: Bearer <token>`.
 
-Seeded credentials:
+Test credentials:
 
-- `admin@coastaleats.com` / `Password123!`
-- `mia.manager@coastaleats.com` / `Password123!`
-- `logan.manager@coastaleats.com` / `Password123!`
-- `sarah@coastaleats.com` / `Password123!`
+- Run `pnpm db:seed` to generate local accounts.
+- Store any default credentials in a secrets manager or CI/CD secrets (never in repo docs).
+- Rotate or revoke test credentials after use.
 
 ## Deployment (Render)
 

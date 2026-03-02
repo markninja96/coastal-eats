@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
@@ -70,6 +70,9 @@ export class UsersService {
 
     const byEmail = await this.findByEmail(input.email);
     if (byEmail) {
+      if (byEmail.googleId && byEmail.googleId !== input.googleId) {
+        throw new ConflictException('Google account already linked');
+      }
       if (!byEmail.googleId) {
         await this.attachGoogleId(byEmail.id, input.googleId);
       }

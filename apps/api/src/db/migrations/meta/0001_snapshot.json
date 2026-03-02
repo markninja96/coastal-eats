@@ -62,7 +62,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "uq_users_email": {
+          "name": "uq_users_email",
+          "columns": ["email"]
+        },
+        "uq_users_google_id": {
+          "name": "uq_users_google_id",
+          "columns": ["google_id"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -879,26 +888,17 @@
     "public.assignment_status": {
       "name": "assignment_status",
       "schema": "public",
-      "values": [
-        "assigned",
-        "cancelled"
-      ]
+      "values": ["assigned", "cancelled"]
     },
     "public.availability_exception_type": {
       "name": "availability_exception_type",
       "schema": "public",
-      "values": [
-        "available",
-        "unavailable"
-      ]
+      "values": ["available", "unavailable"]
     },
     "public.shift_status": {
       "name": "shift_status",
       "schema": "public",
-      "values": [
-        "draft",
-        "published"
-      ]
+      "values": ["draft", "published"]
     },
     "public.swap_status": {
       "name": "swap_status",
@@ -915,19 +915,12 @@
     "public.swap_type": {
       "name": "swap_type",
       "schema": "public",
-      "values": [
-        "swap",
-        "drop"
-      ]
+      "values": ["swap", "drop"]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "admin",
-        "manager",
-        "staff"
-      ]
+      "values": ["admin", "manager", "staff"]
     }
   },
   "schemas": {},
