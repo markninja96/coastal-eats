@@ -10,6 +10,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { eq } from 'drizzle-orm';
 
 export const userRole = pgEnum('user_role', ['admin', 'manager', 'staff']);
 export const shiftStatus = pgEnum('shift_status', ['draft', 'published']);
@@ -159,17 +160,25 @@ export const shifts = pgTable('shifts', {
     .notNull(),
 });
 
-export const shiftAssignments = pgTable('shift_assignments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').notNull(),
-  staffId: uuid('staff_id').notNull(),
-  status: assignmentStatus('status').notNull().default('assigned'),
-  assignedBy: uuid('assigned_by').notNull(),
-  assignedAt: timestamp('assigned_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
-});
+export const shiftAssignments = pgTable(
+  'shift_assignments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    shiftId: uuid('shift_id').notNull(),
+    staffId: uuid('staff_id').notNull(),
+    status: assignmentStatus('status').notNull().default('assigned'),
+    assignedBy: uuid('assigned_by').notNull(),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  },
+  (table) => ({
+    uniqueActiveAssignment: uniqueIndex('uq_shift_staff_active')
+      .on(table.shiftId, table.staffId)
+      .where(eq(table.status, 'assigned')),
+  }),
+);
 
 export const swapRequests = pgTable('swap_requests', {
   id: uuid('id').defaultRandom().primaryKey(),

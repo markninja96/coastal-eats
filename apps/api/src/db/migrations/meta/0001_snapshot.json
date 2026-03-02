@@ -139,16 +139,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "uq_users_email": {
-          "name": "uq_users_email",
-          "columns": ["email"]
-        },
-        "uq_users_google_id": {
-          "name": "uq_users_google_id",
-          "columns": ["google_id"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -422,7 +413,14 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "uq_shift_staff_active": {
+          "name": "uq_shift_staff_active",
+          "columns": ["shift_id", "staff_id"],
+          "isUnique": true,
+          "where": "status = 'assigned'"
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -878,7 +876,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "uq_users_email": {
+          "name": "uq_users_email",
+          "columns": ["email"]
+        },
+        "uq_users_google_id": {
+          "name": "uq_users_google_id",
+          "columns": ["google_id"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

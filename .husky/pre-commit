@@ -1,0 +1,2 @@
+#!/bin/sh
+pnpm nx affected -t lint,typecheck --files $(git diff --name-only --cached)
