@@ -223,45 +223,78 @@ export class ShiftsService {
   }
 
   async assign(user: AuthUser, shiftId: string, staffId: string) {
+    try {
+      return await this.database.transaction(async (tx) => {
+        const [shift] = await tx
+          .select()
+          .from(shifts)
+          .where(eq(shifts.id, shiftId))
+          .for('update')
+          .limit(1);
+        if (!shift) throw new NotFoundException('Shift not found');
+
+        await this.assertLocationAccess(user, shift.locationId);
+
+        const [staff] = await tx
+          .select()
+          .from(users)
+          .where(and(eq(users.id, staffId), eq(users.role, 'staff')))
+          .limit(1);
+        if (!staff) {
+          throw new BadRequestException('Staff member not found');
+        }
+
+        const violations = await this.checkConstraints(tx, { staffId, shift });
+        if (violations.length) {
+          const suggestions = await this.suggestStaff(tx, shift);
+          throw new BadRequestException({
+            message: 'Assignment violates constraints',
+            violations,
+            suggestions,
+          });
+        }
+
+        const [assignment] = await tx
+          .insert(shiftAssignments)
+          .values({
+            shiftId: shift.id,
+            staffId,
+            status: 'assigned',
+            assignedBy: user.id,
+          })
+          .returning();
+
+        return assignment;
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        const suggestions = await this.suggestStaff(
+          this.database,
+          await this.getShiftOrThrow(shiftId),
+        );
+        throw new BadRequestException({
+          message: 'Assignment violates constraints',
+          violations: [
+            {
+              code: 'duplicate',
+              message: 'Staff is already assigned to this shift',
+            },
+          ],
+          suggestions,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async getShiftOrThrow(shiftId: string) {
     const [shift] = await this.database
       .select()
       .from(shifts)
       .where(eq(shifts.id, shiftId))
       .limit(1);
     if (!shift) throw new NotFoundException('Shift not found');
-
-    await this.assertLocationAccess(user, shift.locationId);
-
-    const [staff] = await this.database
-      .select()
-      .from(users)
-      .where(and(eq(users.id, staffId), eq(users.role, 'staff')))
-      .limit(1);
-    if (!staff) {
-      throw new BadRequestException('Staff member not found');
-    }
-
-    const violations = await this.checkConstraints({ staffId, shift });
-    if (violations.length) {
-      const suggestions = await this.suggestStaff(shift);
-      throw new BadRequestException({
-        message: 'Assignment violates constraints',
-        violations,
-        suggestions,
-      });
-    }
-
-    const [assignment] = await this.database
-      .insert(shiftAssignments)
-      .values({
-        shiftId: shift.id,
-        staffId,
-        status: 'assigned',
-        assignedBy: user.id,
-      })
-      .returning();
-
-    return assignment;
+    return shift;
   }
 
   async unassign(user: AuthUser, shiftId: string, assignmentId: string) {
@@ -292,16 +325,19 @@ export class ShiftsService {
     return updated;
   }
 
-  private async checkConstraints({
-    staffId,
-    shift,
-  }: {
-    staffId: string;
-    shift: typeof shifts.$inferSelect;
-  }): Promise<ConstraintViolation[]> {
+  private async checkConstraints(
+    dbClient: typeof db,
+    {
+      staffId,
+      shift,
+    }: {
+      staffId: string;
+      shift: typeof shifts.$inferSelect;
+    },
+  ): Promise<ConstraintViolation[]> {
     const violations: ConstraintViolation[] = [];
 
-    const locationCheck = await this.database
+    const locationCheck = await dbClient
       .select()
       .from(staffLocations)
       .where(
@@ -310,7 +346,7 @@ export class ShiftsService {
           eq(staffLocations.locationId, shift.locationId),
           or(
             isNull(staffLocations.decertifiedAt),
-            gt(staffLocations.decertifiedAt, shift.startAt),
+            gt(staffLocations.decertifiedAt, shift.endAt),
           ),
         ),
       )
@@ -323,7 +359,7 @@ export class ShiftsService {
     }
 
     if (shift.requiredSkillId) {
-      const skillCheck = await this.database
+      const skillCheck = await dbClient
         .select()
         .from(staffSkills)
         .where(
@@ -343,7 +379,7 @@ export class ShiftsService {
 
     const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
     const windowEnd = new Date(shift.endAt.getTime() + 10 * 60 * 60 * 1000);
-    const assignments = await this.database
+    const assignments = await dbClient
       .select({
         startAt: shifts.startAt,
         endAt: shifts.endAt,
@@ -354,8 +390,8 @@ export class ShiftsService {
         and(
           eq(shiftAssignments.staffId, staffId),
           eq(shiftAssignments.status, 'assigned'),
-          gte(shifts.startAt, windowStart),
-          lte(shifts.endAt, windowEnd),
+          lte(shifts.startAt, windowEnd),
+          gte(shifts.endAt, windowStart),
         ),
       );
 
@@ -385,7 +421,7 @@ export class ShiftsService {
       }
     });
 
-    const availability = await this.checkAvailability(staffId, shift);
+    const availability = await this.checkAvailability(dbClient, staffId, shift);
     if (!availability.available) {
       violations.push({
         code: 'availability',
@@ -397,10 +433,11 @@ export class ShiftsService {
   }
 
   private async checkAvailability(
+    dbClient: typeof db,
     staffId: string,
     shift: typeof shifts.$inferSelect,
   ) {
-    const [location] = await this.database
+    const [location] = await dbClient
       .select()
       .from(locations)
       .where(eq(locations.id, shift.locationId))
@@ -416,19 +453,44 @@ export class ShiftsService {
     const [month, day, year] = shiftDate.split('/').map(Number);
     const shiftDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 
-    const exceptions = await this.database
+    const exceptions = await dbClient
       .select()
       .from(availabilityExceptions)
       .where(eq(availabilityExceptions.staffId, staffId));
 
-    const exceptionHit = exceptions.find((exception) => {
-      const exceptionDate = new Intl.DateTimeFormat('en-US', {
-        timeZone: exception.timezone,
+    const toDateKey = (date: Date, tz: string) =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
-      }).format(exception.date);
-      return exceptionDate === shiftDate;
+      }).format(date);
+
+    const toTimeKey = (date: Date, tz: string) =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(date) + ':00';
+
+    const exceptionHit = exceptions.find((exception) => {
+      const exceptionDate = toDateKey(exception.date, exception.timezone);
+      if (exceptionDate !== shiftDate) return false;
+      if (exception.locationId && exception.locationId !== shift.locationId) {
+        return false;
+      }
+      if (!exception.startTime || !exception.endTime) return true;
+      const shiftStartKey = toTimeKey(shift.startAt, exception.timezone);
+      const shiftEndKey = toTimeKey(shift.endAt, exception.timezone);
+      const overlaps =
+        exception.startTime <= shiftEndKey &&
+        exception.endTime >= shiftStartKey;
+      const fullyCovers =
+        exception.startTime <= shiftStartKey &&
+        exception.endTime >= shiftEndKey;
+      if (exception.type === 'unavailable') return overlaps;
+      return fullyCovers;
     });
 
     if (exceptionHit?.type === 'unavailable') {
@@ -438,7 +500,7 @@ export class ShiftsService {
       return { available: true };
     }
 
-    const windows = await this.database
+    const windows = await dbClient
       .select()
       .from(availabilityWindows)
       .where(
@@ -448,10 +510,19 @@ export class ShiftsService {
         ),
       );
 
-    if (!windows.length) {
+    const matchingWindow = windows.find((window) => {
+      if (window.locationId && window.locationId !== shift.locationId) {
+        return false;
+      }
+      const shiftStartKey = toTimeKey(shift.startAt, window.timezone);
+      const shiftEndKey = toTimeKey(shift.endAt, window.timezone);
+      return window.startTime <= shiftStartKey && window.endTime >= shiftEndKey;
+    });
+
+    if (!matchingWindow) {
       return {
         available: false,
-        reason: 'No availability window for this day',
+        reason: 'No availability window for this time',
       };
     }
 
@@ -459,6 +530,7 @@ export class ShiftsService {
   }
 
   private async suggestStaff(
+    dbClient: typeof db,
     shift: typeof shifts.$inferSelect,
   ): Promise<Suggestion[]> {
     const conditions = [
@@ -466,18 +538,18 @@ export class ShiftsService {
       eq(staffLocations.locationId, shift.locationId),
       or(
         isNull(staffLocations.decertifiedAt),
-        gt(staffLocations.decertifiedAt, shift.startAt),
+        gt(staffLocations.decertifiedAt, shift.endAt),
       ),
     ];
 
-    const baseQuery = this.database
+    const baseQuery = dbClient
       .select({ id: users.id, name: users.name })
       .from(users)
       .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
       .where(and(...conditions));
 
     const staffList = shift.requiredSkillId
-      ? await this.database
+      ? await dbClient
           .select({ id: users.id, name: users.name })
           .from(users)
           .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
@@ -489,7 +561,7 @@ export class ShiftsService {
     const suggestions: Suggestion[] = [];
 
     for (const staff of staffList) {
-      const violations = await this.checkConstraints({
+      const violations = await this.checkConstraints(dbClient, {
         staffId: staff.id,
         shift,
       });
