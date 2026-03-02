@@ -21,6 +21,8 @@ import {
 } from '../db/schema';
 import type { AuthUser } from '../auth/auth.types';
 
+type DbClient = Omit<typeof db, '$client'>;
+
 type ShiftInput = {
   locationId: string;
   startAt: Date;
@@ -326,7 +328,7 @@ export class ShiftsService {
   }
 
   private async checkConstraints(
-    dbClient: typeof db,
+    dbClient: DbClient,
     {
       staffId,
       shift,
@@ -433,7 +435,7 @@ export class ShiftsService {
   }
 
   private async checkAvailability(
-    dbClient: typeof db,
+    dbClient: DbClient,
     staffId: string,
     shift: typeof shifts.$inferSelect,
   ) {
@@ -530,7 +532,7 @@ export class ShiftsService {
   }
 
   private async suggestStaff(
-    dbClient: typeof db,
+    dbClient: DbClient,
     shift: typeof shifts.$inferSelect,
   ): Promise<Suggestion[]> {
     const conditions = [
