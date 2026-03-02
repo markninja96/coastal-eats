@@ -4,12 +4,26 @@ import { Badge } from '../components/badge';
 import { Button } from '../components/button';
 import { Calendar } from '../components/calendar';
 import { Card, CardBody, CardHeader } from '../components/card';
+import { ConflictBanner } from '../components/conflict-banner';
 import { InlineAlert } from '../components/inline-alert';
 import { Input } from '../components/input';
 import { PageHeader } from '../components/page-header';
 import { StatCard } from '../components/stat-card';
 import { Textarea } from '../components/textarea';
 import { TimezoneSelect } from '../components/timezone-select';
+import { WeeklyGrid } from '../components/weekly-grid';
+import { AvailabilityBadge } from '../components/availability-badge';
+import { ApprovalActions } from '../components/approval-actions';
+import { EmptyState } from '../components/empty-state';
+import { FairnessScore } from '../components/fairness-score';
+import { HoursBar } from '../components/hours-bar';
+import { LiveIndicator } from '../components/live-indicator';
+import { NotificationItem } from '../components/notification-item';
+import { OvertimeMeter } from '../components/overtime-meter';
+import { PremiumShiftTag } from '../components/premium-shift-tag';
+import { PresenceList } from '../components/presence-list';
+import { SwapRequestCard } from '../components/swap-request-card';
+import { ShiftCard } from '../components/shift-card';
 
 export function ComponentsRoute() {
   const shiftTitleId = React.useId();
@@ -125,6 +139,144 @@ export function ComponentsRoute() {
           <Calendar mode="single" />
         </CardBody>
       </Card>
+
+      <ShiftCard
+        title="Bartender coverage"
+        timeRange="Fri, 4:00 PM - 12:00 AM"
+        location="Seattle waterfront"
+        headcount="2 of 3 filled"
+        status="published"
+        assignments={[
+          { name: 'Sarah Chen', role: 'Lead', status: 'assigned' },
+          { name: 'John Rivera', role: 'Backup', status: 'pending' },
+          { name: 'Open slot', status: 'swap' },
+        ]}
+        actions={<Button size="sm">Assign</Button>}
+      />
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-display text-2xl">Weekly grid</h2>
+        </CardHeader>
+        <CardBody>
+          <WeeklyGrid
+            days={['Mon', 'Tue', 'Wed', 'Thu', 'Fri']}
+            shifts={[
+              {
+                id: '1',
+                day: 'Mon',
+                start: '10 AM',
+                end: '4 PM',
+                title: 'Line cook',
+                status: 'published',
+              },
+              {
+                id: '2',
+                day: 'Wed',
+                start: '2 PM',
+                end: '10 PM',
+                title: 'Bartender',
+                meta: '2 of 3 filled',
+                status: 'draft',
+              },
+              {
+                id: '3',
+                day: 'Fri',
+                start: '4 PM',
+                end: '11 PM',
+                title: 'Server',
+                meta: 'Overtime risk',
+                status: 'published',
+              },
+            ]}
+          />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-display text-2xl">Availability + conflicts</h2>
+        </CardHeader>
+        <CardBody className="grid gap-4">
+          <div className="flex flex-wrap gap-2">
+            <AvailabilityBadge status="available" label="Available" />
+            <AvailabilityBadge status="partial" label="Partial" />
+            <AvailabilityBadge status="unavailable" label="Unavailable" />
+          </div>
+          <ConflictBanner
+            title="Sarah Chen is unavailable"
+            description="This shift falls outside the staff member's availability window."
+            rule="Availability"
+            suggestions={[
+              { name: 'John Rivera', detail: 'Server · Available' },
+              { name: 'Maria Santos', detail: 'Server · Certified' },
+            ]}
+          />
+        </CardBody>
+      </Card>
+
+      <SwapRequestCard
+        requester="Sarah Chen"
+        shift="Fri, 4:00 PM - 12:00 AM · Seattle waterfront"
+        status="pending"
+        type="swap"
+        expiresIn="22h"
+        note="Doctor appointment. Can swap with another server."
+        actions={<ApprovalActions />}
+      />
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-display text-2xl">Compliance + fairness</h2>
+        </CardHeader>
+        <CardBody className="grid gap-6 md:grid-cols-2">
+          <OvertimeMeter label="Projected hours" hours={38} limit={40} />
+          <FairnessScore score={82} />
+          <HoursBar assigned={28} desired={32} />
+          <div className="flex items-center gap-2">
+            <PremiumShiftTag />
+            <span className="text-sm text-ink/60">Friday 7pm - 11pm</span>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <h2 className="font-display text-2xl">Notifications + presence</h2>
+          <LiveIndicator />
+        </CardHeader>
+        <CardBody className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-3">
+            <NotificationItem
+              title="Swap approved"
+              body="John Rivera accepted the Friday shift."
+              time="2m ago"
+              unread
+            />
+            <NotificationItem
+              title="Overtime warning"
+              body="Maria Santos is projected to hit 41 hours."
+              time="1h ago"
+            />
+          </div>
+          <PresenceList
+            items={[
+              { name: 'Devon Blake', role: 'Host', location: 'Miami Beach' },
+              {
+                name: 'John Rivera',
+                role: 'Server',
+                location: 'Seattle waterfront',
+              },
+            ]}
+          />
+        </CardBody>
+      </Card>
+
+      <EmptyState
+        title="No swap requests"
+        description="Staff haven’t submitted any swap or drop requests yet."
+        action={<Button size="sm">Invite staff</Button>}
+      />
     </div>
   );
 }
