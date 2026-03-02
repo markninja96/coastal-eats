@@ -16,6 +16,9 @@ import type { AuthUser } from '../auth/auth.types';
 import { ShiftsService } from './shifts.service';
 
 const idSchema = z.string().uuid();
+const assignmentSchema = z.object({
+  staffId: z.string().uuid(),
+});
 const shiftInputSchema = z.object({
   locationId: z.string().uuid(),
   startAt: z.coerce.date(),
@@ -89,5 +92,47 @@ export class ShiftsController {
       throw new BadRequestException('Invalid shift id');
     }
     return this.shiftsService.unpublish(req.user, idParsed.data);
+  }
+
+  @Post(':id/assignments')
+  async assign(
+    @Req() req: { user: AuthUser },
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const idParsed = idSchema.safeParse(id);
+    if (!idParsed.success) {
+      throw new BadRequestException('Invalid shift id');
+    }
+    const parsed = assignmentSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    return this.shiftsService.assign(
+      req.user,
+      idParsed.data,
+      parsed.data.staffId,
+    );
+  }
+
+  @Post(':id/assignments/:assignmentId/unassign')
+  async unassign(
+    @Req() req: { user: AuthUser },
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    const idParsed = idSchema.safeParse(id);
+    if (!idParsed.success) {
+      throw new BadRequestException('Invalid shift id');
+    }
+    const assignmentParsed = idSchema.safeParse(assignmentId);
+    if (!assignmentParsed.success) {
+      throw new BadRequestException('Invalid assignment id');
+    }
+    return this.shiftsService.unassign(
+      req.user,
+      idParsed.data,
+      assignmentParsed.data,
+    );
   }
 }
