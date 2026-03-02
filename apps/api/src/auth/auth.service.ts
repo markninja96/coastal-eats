@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { compare } from 'bcryptjs';
+import { compare, hash } from 'bcryptjs';
 import type { Profile } from 'passport-google-oauth20';
 import { UsersService } from './users.service';
 
@@ -38,6 +38,16 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       user: this.usersService.toSafeUser(user),
     };
+  }
+
+  async register(name: string, email: string, password: string) {
+    const passwordHash = await hash(password, 10);
+    const user = await this.usersService.createLocalUser({
+      name,
+      email,
+      passwordHash,
+    });
+    return this.login(user.id);
   }
 
   async profile(userId: string) {

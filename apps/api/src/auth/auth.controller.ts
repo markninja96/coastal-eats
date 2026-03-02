@@ -17,6 +17,12 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+const registerSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -47,6 +53,23 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@Req() req: { user: { sub: string } }) {
     return this.authService.profile(req.user.sub);
+  }
+
+  @Post('register')
+  async register(@Req() req: { body: unknown }) {
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Invalid registration payload',
+        issues: parsed.error.flatten(),
+      });
+    }
+
+    return this.authService.register(
+      parsed.data.name,
+      parsed.data.email,
+      parsed.data.password,
+    );
   }
 
   @Get('google')
