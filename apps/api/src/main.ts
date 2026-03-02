@@ -7,6 +7,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import session from 'express-session';
 import passport from 'passport';
+import type { AuthUser } from './auth/auth.types';
 import { UsersService } from './auth/users.service';
 import { AppModule } from './app/app.module';
 
@@ -31,7 +32,9 @@ async function bootstrap() {
     }),
   );
   const usersService = app.get(UsersService);
-  passport.serializeUser((user: any, done) => done(null, user.id));
+  passport.serializeUser((user: unknown, done) =>
+    done(null, (user as AuthUser).id),
+  );
   passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await usersService.findById(id);
