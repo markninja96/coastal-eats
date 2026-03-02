@@ -1,15 +1,15 @@
 import { Link, Outlet } from '@tanstack/react-router';
 
-export function AppLayout() {
-  const navItems = [
-    { to: '/', label: 'Overview' },
-    { to: '/schedule', label: 'Schedule' },
-    { to: '/swaps', label: 'Swaps' },
-    { to: '/compliance', label: 'Compliance' },
-    { to: '/fairness', label: 'Fairness' },
-    { to: '/components', label: 'Components' },
-  ];
+const NAV_ITEMS = [
+  { to: '/', label: 'Overview' },
+  { to: '/schedule', label: 'Schedule' },
+  { to: '/swaps', label: 'Swaps' },
+  { to: '/compliance', label: 'Compliance' },
+  { to: '/fairness', label: 'Fairness' },
+  { to: '/components', label: 'Components' },
+] as const;
 
+export function AppLayout() {
   return (
     <div className="min-h-screen bg-sky-700 text-ink">
       <header className="border-b border-white/15 bg-sand/80 backdrop-blur">
@@ -24,7 +24,7 @@ export function AppLayout() {
             </div>
           </div>
           <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
-            {navItems.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
