@@ -74,6 +74,7 @@
     "@tailwindcss/postcss": "^4.2.1",
     "@tailwindcss/vite": "^4.2.1",
     "@types/jest": "^30.0.0",
+    "@types/ms": "^2.1.0",
     "@types/node": "20.19.9",
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/passport-jwt": "^4.0.1",
