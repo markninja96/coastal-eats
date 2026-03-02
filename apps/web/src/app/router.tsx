@@ -10,6 +10,9 @@ import { ScheduleRoute } from './routes/schedule';
 import { SwapsRoute } from './routes/swaps';
 import { ComplianceRoute } from './routes/compliance';
 import { FairnessRoute } from './routes/fairness';
+import { NotificationsRoute } from './routes/notifications';
+import { AuditRoute } from './routes/audit';
+import { LoginRoute } from './routes/login';
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -51,6 +54,24 @@ const fairnessRoute = createRoute({
   component: FairnessRoute,
 });
 
+const notificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/notifications',
+  component: NotificationsRoute,
+});
+
+const auditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/audit',
+  component: AuditRoute,
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  component: LoginRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   componentsRoute,
@@ -58,6 +79,9 @@ const routeTree = rootRoute.addChildren([
   swapsRoute,
   complianceRoute,
   fairnessRoute,
+  notificationsRoute,
+  auditRoute,
+  loginRoute,
 ]);
 
 export const router = createRouter({ routeTree });

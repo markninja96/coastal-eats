@@ -6,7 +6,10 @@ const NAV_ITEMS = [
   { to: '/swaps', label: 'Swaps' },
   { to: '/compliance', label: 'Compliance' },
   { to: '/fairness', label: 'Fairness' },
+  { to: '/notifications', label: 'Notifications' },
+  { to: '/audit', label: 'Audit' },
   { to: '/components', label: 'Components' },
+  { to: '/login', label: 'Login' },
 ] as const;
 
 export function AppLayout() {
