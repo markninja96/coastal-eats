@@ -458,7 +458,13 @@ export class ShiftsService {
     const exceptions = await dbClient
       .select()
       .from(availabilityExceptions)
-      .where(eq(availabilityExceptions.staffId, staffId));
+      .where(
+        and(
+          eq(availabilityExceptions.staffId, staffId),
+          lte(availabilityExceptions.date, shift.endAt),
+          gte(availabilityExceptions.date, shift.startAt),
+        ),
+      );
 
     const toDateKey = (date: Date, tz: string) =>
       new Intl.DateTimeFormat('en-US', {
@@ -544,22 +550,20 @@ export class ShiftsService {
       ),
     ];
 
+    const skillCondition = shift.requiredSkillId
+      ? eq(staffSkills.skillId, shift.requiredSkillId)
+      : undefined;
+
     const baseQuery = dbClient
       .select({ id: users.id, name: users.name })
       .from(users)
-      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
-      .where(and(...conditions));
+      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id));
 
-    const staffList = shift.requiredSkillId
-      ? await dbClient
-          .select({ id: users.id, name: users.name })
-          .from(users)
-          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+    const staffList = skillCondition
+      ? await baseQuery
           .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-          .where(
-            and(...conditions, eq(staffSkills.skillId, shift.requiredSkillId)),
-          )
-      : await baseQuery;
+          .where(and(...conditions, skillCondition))
+      : await baseQuery.where(and(...conditions));
     const suggestions: Suggestion[] = [];
 
     for (const staff of staffList) {
