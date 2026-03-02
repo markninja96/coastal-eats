@@ -62,16 +62,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "uq_users_email": {
-          "name": "uq_users_email",
-          "columns": ["email"]
-        },
-        "uq_users_google_id": {
-          "name": "uq_users_google_id",
-          "columns": ["google_id"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -148,7 +139,16 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "uq_users_email": {
+          "name": "uq_users_email",
+          "columns": ["email"]
+        },
+        "uq_users_google_id": {
+          "name": "uq_users_google_id",
+          "columns": ["google_id"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

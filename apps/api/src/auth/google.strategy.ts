@@ -11,22 +11,31 @@ export const googleOAuthConfigured = Boolean(
   googleClientId && googleClientSecret && googleCallbackUrl,
 );
 
+const googleConfig = googleOAuthConfigured
+  ? {
+      clientID: googleClientId,
+      clientSecret: googleClientSecret,
+      callbackURL: googleCallbackUrl,
+      scope: ['email', 'profile'],
+      state: true,
+    }
+  : {
+      clientID: '',
+      clientSecret: '',
+      callbackURL: '',
+      scope: [],
+      state: true,
+    };
+
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  private readonly logger = new Logger(GoogleStrategy.name);
+
   constructor(private readonly authService: AuthService) {
-    super({
-      clientID: googleOAuthConfigured ? googleClientId : '',
-      clientSecret: googleOAuthConfigured ? googleClientSecret : '',
-      callbackURL: googleOAuthConfigured ? googleCallbackUrl : '',
-      scope: googleOAuthConfigured ? ['email', 'profile'] : [],
-      state: true,
-    });
+    super(googleConfig);
 
     if (!googleOAuthConfigured) {
-      Logger.warn(
-        'Google OAuth is not configured; skipping strategy.',
-        GoogleStrategy.name,
-      );
+      this.logger.warn('Google OAuth is not configured; skipping strategy.');
     }
   }
 

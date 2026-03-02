@@ -65,21 +65,51 @@ export class UsersService {
   }
 
   async findOrCreateGoogleUser(input: GoogleUserInput) {
-    const byGoogle = await this.findByGoogleId(input.googleId);
-    if (byGoogle) return byGoogle;
+    try {
+      return await this.database.transaction(async (tx) => {
+        const [byGoogle] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.googleId, input.googleId))
+          .limit(1);
+        if (byGoogle) return byGoogle;
 
-    const byEmail = await this.findByEmail(input.email);
-    if (byEmail) {
-      if (byEmail.googleId && byEmail.googleId !== input.googleId) {
+        const [byEmail] = await tx
+          .select()
+          .from(users)
+          .where(eq(users.email, input.email))
+          .limit(1);
+        if (byEmail) {
+          if (byEmail.googleId && byEmail.googleId !== input.googleId) {
+            throw new ConflictException('Google account already linked');
+          }
+          if (!byEmail.googleId) {
+            await tx
+              .update(users)
+              .set({ googleId: input.googleId })
+              .where(eq(users.id, byEmail.id));
+          }
+          return { ...byEmail, googleId: input.googleId };
+        }
+
+        const [created] = await tx
+          .insert(users)
+          .values({
+            email: input.email,
+            name: input.name,
+            role: 'staff',
+            homeTimezone: 'America/Los_Angeles',
+            googleId: input.googleId,
+          })
+          .returning();
+        return created;
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
         throw new ConflictException('Google account already linked');
       }
-      if (!byEmail.googleId) {
-        await this.attachGoogleId(byEmail.id, input.googleId);
-      }
-      return { ...byEmail, googleId: input.googleId };
+      throw error;
     }
-
-    return this.createFromGoogle(input);
   }
 
   toSafeUser(user: UserRecord) {

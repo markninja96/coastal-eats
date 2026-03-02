@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import ms, { type StringValue } from 'ms';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { DbModule } from '../db/db.module';
@@ -22,8 +23,18 @@ import { UsersService } from './users.service';
         return secret;
       })(),
       signOptions: {
-        expiresIn: (process.env.JWT_EXPIRES_IN ||
-          '1d') as unknown as import('ms').StringValue,
+        expiresIn: (() => {
+          const raw = process.env.JWT_EXPIRES_IN || '1d';
+          const numeric = Number(raw);
+          if (!Number.isNaN(numeric) && raw.trim() !== '') {
+            return numeric;
+          }
+          const parsed = ms(raw as StringValue);
+          if (!parsed && raw !== '0') {
+            throw new Error('JWT_EXPIRES_IN must be a valid duration');
+          }
+          return raw as StringValue;
+        })(),
       },
     }),
   ],

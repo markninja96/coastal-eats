@@ -5,7 +5,13 @@ Quick notes for the Nest API app.
 ## Environment
 
 - Copy `apps/api/.env.example` to `apps/api/.env` and set `DATABASE_URL`.
-- Set JWT + Google OAuth vars if using auth endpoints.
+- Auth env vars:
+  - `JWT_SECRET`
+  - `JWT_EXPIRES_IN` (e.g. `1d`, `12h`)
+  - `SESSION_SECRET`
+  - `GOOGLE_CLIENT_ID`
+  - `GOOGLE_CLIENT_SECRET`
+  - `GOOGLE_CALLBACK_URL` (must match Google OAuth console)
 
 Staging callback URL:
 
