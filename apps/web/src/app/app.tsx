@@ -1,6 +1,15 @@
 import { Link, Outlet } from '@tanstack/react-router';
 
 export function AppLayout() {
+  const navItems = [
+    { to: '/', label: 'Overview' },
+    { to: '/schedule', label: 'Schedule' },
+    { to: '/swaps', label: 'Swaps' },
+    { to: '/compliance', label: 'Compliance' },
+    { to: '/fairness', label: 'Fairness' },
+    { to: '/components', label: 'Components' },
+  ];
+
   return (
     <div className="min-h-screen bg-sky-700 text-ink">
       <header className="border-b border-white/15 bg-sand/80 backdrop-blur">
@@ -14,40 +23,16 @@ export function AppLayout() {
               <p className="text-xs text-ink/60">Coastal Eats</p>
             </div>
           </div>
-          <nav className="flex items-center gap-4 text-sm text-ink/80">
-            <Link to="/" className="rounded-full px-3 py-1.5 hover:bg-white/15">
-              Overview
-            </Link>
-            <Link
-              to="/schedule"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Schedule
-            </Link>
-            <Link
-              to="/swaps"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Swaps
-            </Link>
-            <Link
-              to="/compliance"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Compliance
-            </Link>
-            <Link
-              to="/fairness"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Fairness
-            </Link>
-            <Link
-              to="/components"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Components
-            </Link>
+          <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
+            {navItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="rounded-full px-3 py-1.5 hover:bg-white/15"
+              >
+                {item.label}
+              </Link>
+            ))}
             <button className="rounded-full border border-white/30 bg-mist/60 px-3 py-1.5 text-white hover:border-white/50">
               Seattle
             </button>

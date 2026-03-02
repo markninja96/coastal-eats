@@ -16,7 +16,7 @@ export function SwapsRoute() {
       />
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
           <h2 className="font-display text-2xl">Pending approvals</h2>
           <CountdownTag label="Cutoff in 36h" tone="warning" />
         </CardHeader>

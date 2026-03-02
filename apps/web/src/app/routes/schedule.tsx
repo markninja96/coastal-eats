@@ -5,6 +5,36 @@ import { Button } from '../components/button';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { ConflictBanner } from '../components/conflict-banner';
 
+const WEEKLY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const DEFAULT_SHIFTS = [
+  {
+    id: '1',
+    day: 'Mon',
+    start: '10 AM',
+    end: '4 PM',
+    title: 'Line cook',
+    status: 'published' as const,
+  },
+  {
+    id: '2',
+    day: 'Wed',
+    start: '2 PM',
+    end: '10 PM',
+    title: 'Bartender',
+    meta: '2 of 3 filled',
+    status: 'draft' as const,
+  },
+  {
+    id: '3',
+    day: 'Fri',
+    start: '4 PM',
+    end: '11 PM',
+    title: 'Server',
+    meta: 'Overtime risk',
+    status: 'published' as const,
+  },
+];
+
 export function ScheduleRoute() {
   return (
     <div className="space-y-8">
@@ -25,37 +55,7 @@ export function ScheduleRoute() {
           <h2 className="font-display text-2xl">Week of March 2</h2>
         </CardHeader>
         <CardBody>
-          <WeeklyGrid
-            days={['Mon', 'Tue', 'Wed', 'Thu', 'Fri']}
-            shifts={[
-              {
-                id: '1',
-                day: 'Mon',
-                start: '10 AM',
-                end: '4 PM',
-                title: 'Line cook',
-                status: 'published',
-              },
-              {
-                id: '2',
-                day: 'Wed',
-                start: '2 PM',
-                end: '10 PM',
-                title: 'Bartender',
-                meta: '2 of 3 filled',
-                status: 'draft',
-              },
-              {
-                id: '3',
-                day: 'Fri',
-                start: '4 PM',
-                end: '11 PM',
-                title: 'Server',
-                meta: 'Overtime risk',
-                status: 'published',
-              },
-            ]}
-          />
+          <WeeklyGrid days={WEEKLY_DAYS} shifts={DEFAULT_SHIFTS} />
         </CardBody>
       </Card>
 
