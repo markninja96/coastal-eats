@@ -1,5 +1,17 @@
 import { Link, Outlet } from '@tanstack/react-router';
 
+const NAV_ITEMS = [
+  { to: '/', label: 'Overview' },
+  { to: '/schedule', label: 'Schedule' },
+  { to: '/swaps', label: 'Swaps' },
+  { to: '/compliance', label: 'Compliance' },
+  { to: '/fairness', label: 'Fairness' },
+  { to: '/notifications', label: 'Notifications' },
+  { to: '/audit', label: 'Audit' },
+  { to: '/components', label: 'Components' },
+  { to: '/login', label: 'Login' },
+] as const;
+
 export function AppLayout() {
   return (
     <div className="min-h-screen bg-sky-700 text-ink">
@@ -14,16 +26,16 @@ export function AppLayout() {
               <p className="text-xs text-ink/60">Coastal Eats</p>
             </div>
           </div>
-          <nav className="flex items-center gap-4 text-sm text-ink/80">
-            <Link to="/" className="rounded-full px-3 py-1.5 hover:bg-white/15">
-              Overview
-            </Link>
-            <Link
-              to="/components"
-              className="rounded-full px-3 py-1.5 hover:bg-white/15"
-            >
-              Components
-            </Link>
+          <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="rounded-full px-3 py-1.5 hover:bg-white/15"
+              >
+                {item.label}
+              </Link>
+            ))}
             <button className="rounded-full border border-white/30 bg-mist/60 px-3 py-1.5 text-white hover:border-white/50">
               Seattle
             </button>
