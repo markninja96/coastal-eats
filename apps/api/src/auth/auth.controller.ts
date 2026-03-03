@@ -65,7 +65,6 @@ export class AuthController {
         email: string;
         name: string;
         role: string;
-        homeTimezone: string;
       };
     },
   ) {

@@ -27,14 +27,27 @@ export async function apiFetch<T>(
   options: ApiFetchOptions = {},
 ): Promise<T | undefined> {
   const { body, token, headers, ...rest } = options;
+  const normalizedHeaders = (() => {
+    if (headers instanceof Headers) {
+      const result: Record<string, string> = {};
+      headers.forEach((value, key) => {
+        result[key] = value;
+      });
+      return result;
+    }
+    if (Array.isArray(headers)) {
+      return Object.fromEntries(headers);
+    }
+    return headers ?? {};
+  })();
   const response = await fetch(apiUrl(path), {
     ...rest,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : null),
-      ...headers,
+      ...normalizedHeaders,
     },
-    body: body ? JSON.stringify(body) : undefined,
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
 
   if (!response.ok) {

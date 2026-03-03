@@ -7,7 +7,7 @@ import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { Input } from '../components/input';
 import { Button } from '../components/button';
-import { apiUrl } from '../lib/api';
+import { ApiError, apiUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
 const loginSchema = z.object({
@@ -58,8 +58,21 @@ export function LoginRoute() {
   const isLoginPending = isSubmitting || loginPending;
   const isRegisterPending = isSubmitting || registerPending;
   const redirectTo = redirect ?? '/';
-  const error =
-    (mode === 'login' ? loginError : registerError)?.message ?? null;
+  const errorSource = mode === 'login' ? loginError : registerError;
+  const error = (() => {
+    if (!errorSource) return null;
+    if (errorSource instanceof ApiError) {
+      if (mode === 'login' && errorSource.status === 401) {
+        return 'Invalid credentials';
+      }
+      if (mode === 'register' && errorSource.status === 409) {
+        return 'Email already in use';
+      }
+    }
+    return mode === 'login'
+      ? 'Sign in failed. Please try again.'
+      : 'Registration failed. Please try again.';
+  })();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -122,6 +135,7 @@ export function LoginRoute() {
                     setFieldErrors({});
                   }}
                   disabled={isSubmitting}
+                  aria-pressed={mode === 'login'}
                 >
                   Sign in
                 </button>
@@ -137,6 +151,7 @@ export function LoginRoute() {
                     setFieldErrors({});
                   }}
                   disabled={isSubmitting}
+                  aria-pressed={mode === 'register'}
                 >
                   Register
                 </button>

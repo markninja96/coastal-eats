@@ -70,6 +70,9 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
         method: 'POST',
         body: { email, password },
       });
+      if (!data?.accessToken) {
+        throw new Error('Empty auth response');
+      }
       set({ session: data, loginPending: false });
     } catch (error) {
       const nextError =
@@ -90,6 +93,9 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
         method: 'POST',
         body: { name, email, password },
       });
+      if (!data?.accessToken) {
+        throw new Error('Empty auth response');
+      }
       set({ session: data, registerPending: false });
     } catch (error) {
       set({
@@ -114,8 +120,8 @@ const useAuthStore = create<AuthStore>()(
     name: STORAGE_KEY,
     storage: createJSONStorage(() => localStorage),
     partialize: (state) => ({
-      session: state.session
-        ? { user: state.session.user, accessToken: '' }
+      session: state.session?.accessToken
+        ? { accessToken: '', user: null }
         : null,
     }),
   }),
