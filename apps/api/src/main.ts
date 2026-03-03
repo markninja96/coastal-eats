@@ -13,6 +13,10 @@ import { AppModule } from './app/app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: ['http://localhost:4200', 'https://coastal-eats-iac4.onrender.com'],
+    credentials: true,
+  });
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
   const sessionSecret = process.env.SESSION_SECRET;

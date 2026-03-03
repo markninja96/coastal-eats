@@ -1,6 +1,17 @@
-import { Link, Outlet } from '@tanstack/react-router';
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from '@tanstack/react-router';
+import { useAuth } from './lib/auth';
 
-const NAV_ITEMS = [
+type NavItem = {
+  to: string;
+  label: string;
+};
+
+const PROTECTED_NAV: NavItem[] = [
   { to: '/', label: 'Overview' },
   { to: '/schedule', label: 'Schedule' },
   { to: '/swaps', label: 'Swaps' },
@@ -8,11 +19,27 @@ const NAV_ITEMS = [
   { to: '/fairness', label: 'Fairness' },
   { to: '/notifications', label: 'Notifications' },
   { to: '/audit', label: 'Audit' },
-  { to: '/components', label: 'Components' },
-  { to: '/login', label: 'Login' },
-] as const;
+];
+
+const PUBLIC_NAV: NavItem[] = [{ to: '/components', label: 'Components' }];
 
 export function AppLayout() {
+  const { session, status, logout } = useAuth();
+  const navigate = useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const isLoading = status === 'loading';
+  const signedInName = session?.user?.name ?? session?.user?.email;
+  const initials = signedInName
+    ? signedInName
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('')
+    : null;
+
   return (
     <div className="min-h-screen bg-sky-700 text-ink">
       <header className="border-b border-white/15 bg-sand/80 backdrop-blur">
@@ -27,15 +54,70 @@ export function AppLayout() {
             </div>
           </div>
           <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
-            {NAV_ITEMS.map((item) => (
+            {[...(session ? PROTECTED_NAV : []), ...PUBLIC_NAV].map((item) => {
+              const isActive = pathname === item.to;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`rounded-full px-3 py-1.5 transition ${
+                    isActive
+                      ? 'bg-white/20 text-white shadow-soft'
+                      : 'text-ink/80 hover:bg-white/15'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            {session ? (
+              <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5">
+                {session.user ? (
+                  <>
+                    <span className="flex items-center gap-2 text-xs text-ink/70">
+                      <span className="rounded-full border border-white/30 bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]">
+                        {session.user.role}
+                      </span>
+                      <span className="font-semibold text-ink">
+                        {session.user.name}
+                      </span>
+                    </span>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-white/10 text-[10px] font-semibold text-white">
+                      {initials ?? 'CE'}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-ink/70">Signed in</span>
+                )}
+                {isLoading ? (
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-ink/40">
+                    Syncing
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    navigate({ to: '/login' });
+                  }}
+                  className="rounded-full border border-white/30 px-2 py-0.5 text-xs text-ink/70 hover:border-white/60"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : isLoading ? (
+              <span className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-ink/60">
+                Checking session...
+              </span>
+            ) : (
               <Link
-                key={item.to}
-                to={item.to}
-                className="rounded-full px-3 py-1.5 hover:bg-white/15"
+                to="/login"
+                className="rounded-full border border-white/30 px-3 py-1.5 text-xs text-ink/80 hover:border-white/60"
               >
-                {item.label}
+                Sign in
               </Link>
-            ))}
+            )}
             <button className="rounded-full border border-white/30 bg-mist/60 px-3 py-1.5 text-white hover:border-white/50">
               Seattle
             </button>

@@ -119,6 +119,9 @@ importers:
       zod:
         specifier: ^4.3.6
         version: 4.3.6
+      zustand:
+        specifier: ^4.5.5
+        version: 4.5.7(@types/react@19.2.14)(immer@11.1.4)(react@19.2.4)
     devDependencies:
       '@eslint/js':
         specifier: ^9.8.0
@@ -322,7 +325,11 @@ importers:
 
   apps/api-e2e: {}
 
-  apps/web: {}
+  apps/web:
+    dependencies:
+      zustand:
+        specifier: ^4.5.5
+        version: 4.5.7(@types/react@19.2.14)(immer@11.1.4)(react@19.2.4)
 
   apps/web-e2e: {}
 
@@ -8226,6 +8233,21 @@ packages:
 
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zustand@4.5.7:
+    resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
+    engines: {node: '>=12.7.0'}
+    peerDependencies:
+      '@types/react': '>=16.8'
+      immer: '>=9.0.6'
+      react: '>=16.8'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
 
 snapshots:
 
@@ -17033,3 +17055,11 @@ snapshots:
   yocto-queue@1.2.2: {}
 
   zod@4.3.6: {}
+
+  zustand@4.5.7(@types/react@19.2.14)(immer@11.1.4)(react@19.2.4):
+    dependencies:
+      use-sync-external-store: 1.6.0(react@19.2.4)
+    optionalDependencies:
+      '@types/react': 19.2.14
+      immer: 11.1.4
+      react: 19.2.4

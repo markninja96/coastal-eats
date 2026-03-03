@@ -12,6 +12,12 @@ type GoogleUserInput = {
   googleId: string;
 };
 
+type LocalUserInput = {
+  email: string;
+  name: string;
+  passwordHash: string;
+};
+
 @Injectable()
 export class UsersService {
   constructor(@Inject(DB) private readonly database: typeof db) {}
@@ -26,10 +32,11 @@ export class UsersService {
   }
 
   async findByEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
     const [user] = await this.database
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.email, normalizedEmail))
       .limit(1);
     return user;
   }
@@ -107,6 +114,28 @@ export class UsersService {
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {
         throw new ConflictException('Google account already linked');
+      }
+      throw error;
+    }
+  }
+
+  async createLocalUser(input: LocalUserInput) {
+    try {
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const [created] = await this.database
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          name: input.name,
+          role: 'staff',
+          homeTimezone: 'America/Los_Angeles',
+          passwordHash: input.passwordHash,
+        })
+        .returning();
+      return created;
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictException('Email already in use');
       }
       throw error;
     }

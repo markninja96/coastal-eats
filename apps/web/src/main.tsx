@@ -6,9 +6,17 @@ import { RouterProvider } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { Toaster } from 'sonner';
 import { router } from './app/router';
+import { useAuth } from './app/lib/auth';
 import './styles.css';
 
 const queryClient = new QueryClient();
+
+function AppRouter() {
+  const { session, status } = useAuth();
+  return (
+    <RouterProvider router={router} context={{ auth: { session, status } }} />
+  );
+}
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement,
@@ -17,7 +25,7 @@ const root = ReactDOM.createRoot(
 root.render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AppRouter />
       <Toaster theme="dark" richColors />
       {import.meta.env.DEV ? (
         <ReactQueryDevtools initialIsOpen={false} />
