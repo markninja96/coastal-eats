@@ -22,7 +22,10 @@ export function apiUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
+export async function apiFetch<T>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<T | undefined> {
   const { body, token, headers, ...rest } = options;
   const response = await fetch(apiUrl(path), {
     ...rest,
@@ -40,7 +43,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}) {
   }
 
   if (response.status === 204) {
-    return undefined as T;
+    return undefined;
   }
 
   return (await response.json()) as T;

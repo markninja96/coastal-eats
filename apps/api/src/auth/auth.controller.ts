@@ -20,7 +20,13 @@ const loginSchema = z.object({
 const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z
+    .string()
+    .min(8)
+    .refine(
+      (password) => Buffer.byteLength(password, 'utf8') <= 72,
+      'password must be at most 72 bytes when UTF-8 encoded',
+    ),
 });
 
 @Controller('auth')

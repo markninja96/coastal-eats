@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Navigate, useSearch } from '@tanstack/react-router';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -57,11 +57,9 @@ export function LoginRoute() {
   const isSubmitting = status === 'loading';
   const isLoginPending = isSubmitting || loginPending;
   const isRegisterPending = isSubmitting || registerPending;
-  const redirectTo = useMemo(() => redirect ?? '/', [redirect]);
-  const error = useMemo(() => {
-    const nextError = mode === 'login' ? loginError : registerError;
-    return nextError?.message ?? null;
-  }, [loginError, mode, registerError]);
+  const redirectTo = redirect ?? '/';
+  const error =
+    (mode === 'login' ? loginError : registerError)?.message ?? null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

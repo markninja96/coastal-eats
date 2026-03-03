@@ -11,6 +11,13 @@ import './styles.css';
 
 const queryClient = new QueryClient();
 
+function AppRouter() {
+  const { session, status } = useAuth();
+  return (
+    <RouterProvider router={router} context={{ auth: { session, status } }} />
+  );
+}
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement,
 );
@@ -29,10 +36,3 @@ root.render(
     </QueryClientProvider>
   </StrictMode>,
 );
-
-function AppRouter() {
-  const { session, status } = useAuth();
-  return (
-    <RouterProvider router={router} context={{ auth: { session, status } }} />
-  );
-}

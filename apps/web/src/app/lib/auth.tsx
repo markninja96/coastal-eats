@@ -72,9 +72,13 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
       });
       set({ session: data, loginPending: false });
     } catch (error) {
+      const nextError =
+        error instanceof ApiError || error instanceof Error
+          ? error
+          : new Error(String(error));
       set({
         loginPending: false,
-        loginError: error as Error,
+        loginError: nextError,
       });
       throw error;
     }
@@ -109,7 +113,11 @@ const useAuthStore = create<AuthStore>()(
   persist(authStoreCreator, {
     name: STORAGE_KEY,
     storage: createJSONStorage(() => localStorage),
-    partialize: (state) => ({ session: state.session }),
+    partialize: (state) => ({
+      session: state.session
+        ? { user: state.session.user, accessToken: '' }
+        : null,
+    }),
   }),
 );
 
@@ -126,13 +134,14 @@ function useAuthBootstrap() {
         const user = await apiFetch<AuthUser>('/api/auth/me', {
           token: accessToken ?? undefined,
         });
-        setUser(user);
+        if (!user) {
+          throw new Error('Empty auth response');
+        }
+        setUser(user as AuthUser);
         return user;
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          if (!session?.user) {
-            setSession(null);
-          }
+          setSession(null);
         }
         throw error;
       }

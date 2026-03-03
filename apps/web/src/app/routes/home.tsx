@@ -5,7 +5,7 @@ import {
   Users,
   UserCheck,
 } from 'lucide-react';
-import { Navigate, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { Badge } from '../components/badge';
 import { Button } from '../components/button';
 import { Card, CardBody, CardHeader } from '../components/card';
@@ -37,10 +37,6 @@ export function HomeRoute() {
   const navigate = useNavigate();
   const { session, status } = useAuth();
   const role = session?.user?.role;
-
-  if (!session?.accessToken) {
-    return <Navigate to="/login" search={{ redirect: '/' }} />;
-  }
 
   if (status === 'loading') {
     return (

@@ -32,10 +32,11 @@ export class UsersService {
   }
 
   async findByEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
     const [user] = await this.database
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.email, normalizedEmail))
       .limit(1);
     return user;
   }
@@ -120,10 +121,11 @@ export class UsersService {
 
   async createLocalUser(input: LocalUserInput) {
     try {
+      const normalizedEmail = input.email.trim().toLowerCase();
       const [created] = await this.database
         .insert(users)
         .values({
-          email: input.email,
+          email: normalizedEmail,
           name: input.name,
           role: 'staff',
           homeTimezone: 'America/Los_Angeles',
