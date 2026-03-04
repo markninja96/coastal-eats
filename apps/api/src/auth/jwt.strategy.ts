@@ -10,8 +10,8 @@ const cookieExtractor = (req: Request | undefined) => {
   if (!header) return null;
   const tokenCookie = header
     .split(';')
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
+    .map((entry: string) => entry.trim())
+    .find((entry: string) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
   if (!tokenCookie) return null;
   const rawValue = tokenCookie.slice(AUTH_COOKIE_NAME.length + 1);
   return rawValue ? decodeURIComponent(rawValue) : null;

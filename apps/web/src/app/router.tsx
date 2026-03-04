@@ -48,14 +48,7 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: HomeRoute,
-  beforeLoad: ({ context }) => {
-    if (context.auth.status === 'loading') {
-      return;
-    }
-    if (!context.auth.session?.user) {
-      throw redirect({ to: '/login' });
-    }
-  },
+  beforeLoad: ({ context, location }) => requireAuth({ context, location }),
 });
 
 const componentsRoute = createRoute({

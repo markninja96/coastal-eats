@@ -33,6 +33,10 @@ export class SkillsService {
       .values({ name: input.name })
       .returning(skillSelect);
 
+    if (!created) {
+      throw new Error('Failed to create skill');
+    }
+
     return created;
   }
 }

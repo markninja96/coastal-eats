@@ -178,7 +178,9 @@ export function useAuth(): AuthContextValue {
     loginError,
     registerError,
     logout: () => {
-      void apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => null);
+      void apiFetch('/api/auth/logout', { method: 'POST' }).catch((error) => {
+        console.error('Failed to logout', error);
+      });
       logoutStore();
       queryClient.removeQueries({ queryKey: ['auth'] });
     },

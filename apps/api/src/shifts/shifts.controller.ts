@@ -82,7 +82,43 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
   }
 });
 
-const shiftUpdateSchema = shiftInputBaseSchema.partial();
+const shiftUpdateSchema = shiftInputBaseSchema
+  .partial()
+  .superRefine((data, ctx) => {
+    if (!data.startAt || !data.endAt) return;
+    const minStart = Date.now() + MIN_START_MINUTES * 60000;
+    if (data.startAt.getTime() < minStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['startAt'],
+        message: 'Start time must be at least 30 minutes from now.',
+      });
+    }
+
+    const diffMinutes = (data.endAt.getTime() - data.startAt.getTime()) / 60000;
+    if (diffMinutes <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endAt'],
+        message: 'Shift end must be after start.',
+      });
+      return;
+    }
+    if (diffMinutes < MIN_DURATION_MINUTES) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endAt'],
+        message: 'Shift must be at least 30 minutes.',
+      });
+    }
+    if (diffMinutes > MAX_DURATION_MINUTES) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endAt'],
+        message: 'Shift cannot exceed 12 hours.',
+      });
+    }
+  });
 
 const listSchema = z.object({
   locationId: z.string().uuid().optional(),

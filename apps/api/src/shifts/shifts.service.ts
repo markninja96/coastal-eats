@@ -425,23 +425,21 @@ export class ShiftsService {
       });
     }
 
-    if (shift.requiredSkillId) {
-      const skillCheck = await dbClient
-        .select()
-        .from(staffSkills)
-        .where(
-          and(
-            eq(staffSkills.staffId, staffId),
-            eq(staffSkills.skillId, shift.requiredSkillId),
-          ),
-        )
-        .limit(1);
-      if (!skillCheck.length) {
-        violations.push({
-          code: 'skill',
-          message: 'Staff lacks required skill',
-        });
-      }
+    const skillCheck = await dbClient
+      .select()
+      .from(staffSkills)
+      .where(
+        and(
+          eq(staffSkills.staffId, staffId),
+          eq(staffSkills.skillId, shift.requiredSkillId),
+        ),
+      )
+      .limit(1);
+    if (!skillCheck.length) {
+      violations.push({
+        code: 'skill',
+        message: 'Staff lacks required skill',
+      });
     }
 
     const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
@@ -615,39 +613,35 @@ export class ShiftsService {
       ),
     ];
 
-    const staffList = shift.requiredSkillId
-      ? await this.database
-          .select({ id: users.id, name: users.name })
-          .from(users)
-          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
-          .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-          .where(
-            and(
-              ...baseConditions,
-              eq(staffSkills.skillId, shift.requiredSkillId),
-            ),
-          )
-      : await this.database
-          .select({ id: users.id, name: users.name })
-          .from(users)
-          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
-          .where(and(...baseConditions));
+    const staffList = await this.database
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+      .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
+      .where(
+        and(...baseConditions, eq(staffSkills.skillId, shift.requiredSkillId)),
+      );
 
-    const results = await Promise.all(
-      staffList.map(async (staff: { id: string; name: string }) => {
-        const availability = await this.checkAvailability(
-          this.database,
-          staff.id,
-          shift,
-        );
-        return {
-          id: staff.id,
-          name: staff.name,
-          availability: availability.available ? 'available' : 'unavailable',
-          reason: availability.reason,
-        };
-      }),
-    );
+    const results = [] as Array<{
+      id: string;
+      name: string;
+      availability: 'available' | 'unavailable';
+      reason?: string;
+    }>;
+
+    for (const staff of staffList) {
+      const availability = await this.checkAvailability(
+        this.database,
+        staff.id,
+        shift,
+      );
+      results.push({
+        id: staff.id,
+        name: staff.name,
+        availability: availability.available ? 'available' : 'unavailable',
+        reason: availability.reason,
+      });
+    }
 
     return results;
   }
@@ -665,20 +659,16 @@ export class ShiftsService {
       ),
     ];
 
-    const skillCondition = shift.requiredSkillId
-      ? eq(staffSkills.skillId, shift.requiredSkillId)
-      : undefined;
-
     const baseQuery = dbClient
       .select({ id: users.id, name: users.name })
       .from(users)
       .innerJoin(staffLocations, eq(staffLocations.staffId, users.id));
 
-    const staffList = skillCondition
-      ? await baseQuery
-          .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-          .where(and(...conditions, skillCondition))
-      : await baseQuery.where(and(...conditions));
+    const staffList = await baseQuery
+      .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
+      .where(
+        and(...conditions, eq(staffSkills.skillId, shift.requiredSkillId)),
+      );
     const suggestions: Suggestion[] = [];
 
     for (const staff of staffList) {

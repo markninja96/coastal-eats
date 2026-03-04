@@ -5,6 +5,7 @@ import { Card, CardHeader } from './card';
 import { AssignmentPill } from './assignment-pill';
 
 type ShiftAssignment = {
+  id: string;
   name: string;
   role?: string;
   status?: 'assigned' | 'pending' | 'swap' | 'unavailable';
@@ -73,7 +74,7 @@ export function ShiftCard({
             <div className="mt-3 flex flex-wrap gap-2">
               {assignments.map((assignment) => (
                 <AssignmentPill
-                  key={`${assignment.name}-${assignment.role ?? ''}`}
+                  key={assignment.id}
                   name={assignment.name}
                   role={assignment.role}
                   status={assignment.status}

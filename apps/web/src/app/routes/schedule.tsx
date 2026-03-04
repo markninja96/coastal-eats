@@ -298,37 +298,36 @@ export function ScheduleRoute() {
     },
   });
 
+  const invalidateShifts = () =>
+    queryClient.invalidateQueries({
+      queryKey: [
+        'shifts',
+        activeLocationId,
+        weekStartDate.toISOString(),
+        weekEndDate.toISOString(),
+      ],
+    });
+
   const publishMutation = useMutation({
     mutationFn: (shiftId: string) => publishShift(shiftId),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: [
-          'shifts',
-          activeLocationId,
-          weekStartDate.toISOString(),
-          weekEndDate.toISOString(),
-        ],
-      }),
   });
 
   const unpublishMutation = useMutation({
     mutationFn: (shiftId: string) => unpublishShift(shiftId),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: [
-          'shifts',
-          activeLocationId,
-          weekStartDate.toISOString(),
-          weekEndDate.toISOString(),
-        ],
-      }),
   });
 
   const assignMutation = useMutation({
     mutationFn: (payload: { shiftId: string; staffId: string }) =>
       assignShift(payload.shiftId, payload.staffId),
-    onSuccess: () => {
+    onSuccess: (_response, payload) => {
       setConflict(null);
+      setAssignInputs((prev) => {
+        const next = { ...prev };
+        delete next[payload.shiftId];
+        return next;
+      });
+      void invalidateShifts();
+      void queryClient.invalidateQueries({ queryKey: ['shift-staff'] });
     },
     onError: (error) => {
       const parsed = parseAssignmentError(error);
@@ -400,9 +399,12 @@ export function ScheduleRoute() {
     });
   };
 
-  const handlePublishWeek = () => {
+  const handlePublishWeek = async () => {
     if (!draftShifts.length) return;
-    draftShifts.forEach((shift) => publishMutation.mutate(shift.id));
+    await Promise.all(
+      draftShifts.map((shift) => publishMutation.mutateAsync(shift.id)),
+    );
+    void invalidateShifts();
   };
 
   const handleAssign = (shiftId: string) => {
@@ -719,7 +721,11 @@ export function ScheduleRoute() {
                     size="sm"
                     variant="outline"
                     className="bg-white/10 hover:bg-white/20"
-                    onClick={() => publishMutation.mutate(shift.id)}
+                    onClick={() =>
+                      publishMutation.mutate(shift.id, {
+                        onSuccess: () => void invalidateShifts(),
+                      })
+                    }
                     disabled={publishMutation.isPending}
                   >
                     <UploadCloud className="h-4 w-4" />
@@ -730,7 +736,11 @@ export function ScheduleRoute() {
                     size="sm"
                     variant="outline"
                     className="bg-white/10 hover:bg-white/20"
-                    onClick={() => unpublishMutation.mutate(shift.id)}
+                    onClick={() =>
+                      unpublishMutation.mutate(shift.id, {
+                        onSuccess: () => void invalidateShifts(),
+                      })
+                    }
                     disabled={unpublishMutation.isPending}
                   >
                     <Undo2 className="h-4 w-4" />
@@ -740,6 +750,7 @@ export function ScheduleRoute() {
               }
               assignments={
                 shift.assignments?.map((assignment) => ({
+                  id: assignment.id,
                   name: assignment.staffName,
                   status:
                     assignment.status === 'assigned' ? 'assigned' : 'pending',
@@ -800,7 +811,9 @@ export function ScheduleRoute() {
                     <Button
                       size="sm"
                       onClick={() => handleAssign(shift.id)}
-                      disabled={assignMutation.isPending}
+                      disabled={
+                        assignMutation.isPending || !assignInputs[shift.id]
+                      }
                     >
                       Assign
                     </Button>

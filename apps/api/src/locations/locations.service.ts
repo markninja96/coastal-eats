@@ -67,6 +67,10 @@ export class LocationsService {
       })
       .returning(locationSelect);
 
+    if (!created) {
+      throw new Error('Failed to create location');
+    }
+
     return created;
   }
 }

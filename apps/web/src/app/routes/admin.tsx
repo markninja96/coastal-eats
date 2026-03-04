@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { Button } from '../components/button';
@@ -87,6 +88,10 @@ export function AdminRoute() {
       setLocationQuery('');
       void queryClient.invalidateQueries({ queryKey: ['locations'] });
     },
+    onError: (error) => {
+      console.error('Failed to create location', error);
+      toast.error('Failed to create location');
+    },
   });
 
   const createSkillMutation = useMutation({
@@ -94,6 +99,10 @@ export function AdminRoute() {
     onSuccess: () => {
       setNewSkill('');
       void queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+    onError: (error) => {
+      console.error('Failed to create skill', error);
+      toast.error('Failed to create skill');
     },
   });
 
@@ -167,10 +176,17 @@ export function AdminRoute() {
                   onChange={(event) => {
                     const nextValue = event.target.value;
                     setLocationQuery(nextValue);
-                    const nextMatch = locationMatches.find(
+                    const normalizedQuery = nextValue.trim().toLowerCase();
+                    const nextMatches =
+                      normalizedQuery.length < 2
+                        ? []
+                        : cityTimezones
+                            .findFromCityStateProvince(normalizedQuery)
+                            .sort((a, b) => b.pop - a.pop)
+                            .slice(0, 12);
+                    const nextMatch = nextMatches.find(
                       (entry) =>
-                        formatLabel(entry).toLowerCase() ===
-                        nextValue.toLowerCase(),
+                        formatLabel(entry).toLowerCase() === normalizedQuery,
                     );
                     if (nextMatch) {
                       setNewLocation((prev) => ({

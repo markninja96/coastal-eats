@@ -160,9 +160,19 @@ function ShiftDemo() {
       headcount="2 of 3 filled"
       status="published"
       assignments={[
-        { name: 'Sarah Chen', role: 'Lead', status: 'assigned' },
-        { name: 'John Rivera', role: 'Backup', status: 'pending' },
-        { name: 'Open slot', status: 'swap' },
+        {
+          id: 'sarah-chen',
+          name: 'Sarah Chen',
+          role: 'Lead',
+          status: 'assigned',
+        },
+        {
+          id: 'john-rivera',
+          name: 'John Rivera',
+          role: 'Backup',
+          status: 'pending',
+        },
+        { id: 'open-slot', name: 'Open slot', status: 'swap' },
       ]}
       actions={<Button size="sm">Assign</Button>}
     />

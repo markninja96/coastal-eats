@@ -11,12 +11,7 @@ export type Shift = {
   title: string;
   notes?: string | null;
   publishedAt?: string | null;
-  assignments?: Array<{
-    id: string;
-    staffId: string;
-    staffName: string;
-    status: string;
-  }>;
+  assignments?: AssignmentSummary[];
 };
 
 export type ShiftStaff = {
@@ -34,6 +29,13 @@ export type Assignment = {
   assignedBy: string;
   assignedAt: string;
   cancelledAt?: string | null;
+};
+
+type AssignmentSummary = {
+  id: string;
+  staffId: string;
+  staffName: string;
+  status: Assignment['status'];
 };
 
 export type ConstraintViolation = {
@@ -95,8 +97,7 @@ export async function createShift(input: ShiftInput) {
     method: 'POST',
     body: input,
   });
-  if (!response) throw new Error('Empty shift response');
-  return response;
+  return ensureResponse(response, 'Empty shift response');
 }
 
 export async function updateShift(shiftId: string, input: Partial<ShiftInput>) {
@@ -104,24 +105,21 @@ export async function updateShift(shiftId: string, input: Partial<ShiftInput>) {
     method: 'PATCH',
     body: input,
   });
-  if (!response) throw new Error('Empty shift response');
-  return response;
+  return ensureResponse(response, 'Empty shift response');
 }
 
 export async function publishShift(shiftId: string) {
   const response = await apiFetch<Shift>(`/api/shifts/${shiftId}/publish`, {
     method: 'POST',
   });
-  if (!response) throw new Error('Empty shift response');
-  return response;
+  return ensureResponse(response, 'Empty shift response');
 }
 
 export async function unpublishShift(shiftId: string) {
   const response = await apiFetch<Shift>(`/api/shifts/${shiftId}/unpublish`, {
     method: 'POST',
   });
-  if (!response) throw new Error('Empty shift response');
-  return response;
+  return ensureResponse(response, 'Empty shift response');
 }
 
 export async function assignShift(shiftId: string, staffId: string) {
@@ -132,11 +130,18 @@ export async function assignShift(shiftId: string, staffId: string) {
       body: { staffId },
     },
   );
-  if (!response) throw new Error('Empty assignment response');
-  return response;
+  return ensureResponse(response, 'Empty assignment response');
 }
 
 export async function listShiftStaff(shiftId: string) {
   const response = await apiFetch<ShiftStaff[]>(`/api/shifts/${shiftId}/staff`);
   return response ?? [];
 }
+
+const ensureResponse = <T>(
+  response: T | null | undefined,
+  message: string,
+): T => {
+  if (!response) throw new Error(message);
+  return response;
+};

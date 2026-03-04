@@ -271,13 +271,7 @@ export function LoginRoute() {
                   {error}
                 </p>
               ) : null}
-              <Button
-                type="submit"
-                disabled={
-                  (isLoginPending ? true : false) ||
-                  (isRegisterPending ? true : false)
-                }
-              >
+              <Button type="submit" disabled={isSubmitting}>
                 {mode === 'login'
                   ? isLoginPending
                     ? 'Signing in...'
