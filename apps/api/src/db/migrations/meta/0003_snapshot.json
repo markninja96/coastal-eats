@@ -1,6 +1,6 @@
 {
-  "id": "6d1b2c5c-fe49-4437-9231-fccf9cbc9cb0",
-  "prevId": "ab0ee8c8-9e55-4713-99f0-da15a81ac834",
+  "id": "ed29cbd9-5ffb-4cbc-812c-f38b045a291c",
+  "prevId": "0914cb3d-7f3b-4373-80d5-3029bd2836b9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -511,7 +511,7 @@
           "name": "required_skill_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "headcount": {
           "name": "headcount",
@@ -531,8 +531,7 @@
           "name": "title",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'Shift'"
+          "notNull": true
         },
         "notes": {
           "name": "notes",

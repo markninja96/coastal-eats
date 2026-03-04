@@ -56,17 +56,26 @@ export const users = pgTable(
   }),
 );
 
-export const locations = pgTable('locations', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  timezone: text('timezone').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const locations = pgTable(
+  'locations',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull(),
+    city: text('city'),
+    region: text('region'),
+    country: text('country'),
+    timezone: text('timezone').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => ({
+    nameUnique: uniqueIndex('uq_locations_name').on(table.name),
+  }),
+);
 
 export const skills = pgTable('skills', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -145,9 +154,10 @@ export const shifts = pgTable('shifts', {
   locationId: uuid('location_id').notNull(),
   startAt: timestamp('start_at', { withTimezone: true }).notNull(),
   endAt: timestamp('end_at', { withTimezone: true }).notNull(),
-  requiredSkillId: uuid('required_skill_id'),
+  requiredSkillId: uuid('required_skill_id').notNull(),
   headcount: integer('headcount').notNull(),
   status: shiftStatus('status').notNull().default('draft'),
+  title: text('title').notNull(),
   notes: text('notes'),
   publishedAt: timestamp('published_at', { withTimezone: true }),
   createdBy: uuid('created_by').notNull(),

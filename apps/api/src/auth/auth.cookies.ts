@@ -1,0 +1,11 @@
+import type { CookieOptions } from 'express';
+
+export const AUTH_COOKIE_NAME = 'coastal-eats.auth';
+export const AUTH_COOKIE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
+
+export const AUTH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  path: '/',
+};

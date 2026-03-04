@@ -14,4 +14,8 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     }
     return super.canActivate(context as ExecutionContext);
   }
+
+  override getAuthenticateOptions() {
+    return {};
+  }
 }

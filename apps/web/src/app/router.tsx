@@ -14,6 +14,7 @@ import { FairnessRoute } from './routes/fairness';
 import { NotificationsRoute } from './routes/notifications';
 import { AuditRoute } from './routes/audit';
 import { LoginRoute } from './routes/login';
+import { AdminRoute } from './routes/admin';
 import type { AuthContextValue } from './lib/auth';
 
 type RouterContext = {
@@ -27,7 +28,10 @@ const requireAuth = ({
   context: RouterContext;
   location: { pathname: string; search: Record<string, string> };
 }) => {
-  if (!context.auth.session?.accessToken) {
+  if (context.auth.status === 'loading') {
+    return;
+  }
+  if (!context.auth.session?.user) {
     const search = new URLSearchParams(location.search).toString();
     throw redirect({
       to: '/login',
@@ -44,7 +48,7 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: HomeRoute,
-  beforeLoad: requireAuth,
+  beforeLoad: ({ context, location }) => requireAuth({ context, location }),
 });
 
 const componentsRoute = createRoute({
@@ -95,6 +99,13 @@ const auditRoute = createRoute({
   beforeLoad: requireAuth,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/admin',
+  component: AdminRoute,
+  beforeLoad: requireAuth,
+});
+
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
@@ -110,6 +121,7 @@ const routeTree = rootRoute.addChildren([
   fairnessRoute,
   notificationsRoute,
   auditRoute,
+  adminRoute,
   loginRoute,
 ]);
 
