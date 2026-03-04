@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import { locations, managerLocations, staffLocations } from '../db/schema';
@@ -45,10 +45,18 @@ export class LocationsService {
     }
 
     return this.database
-      .select(locationSelect)
+      .selectDistinct(locationSelect)
       .from(locations)
       .innerJoin(staffLocations, eq(staffLocations.locationId, locations.id))
-      .where(eq(staffLocations.staffId, user.id));
+      .where(
+        and(
+          eq(staffLocations.staffId, user.id),
+          or(
+            isNull(staffLocations.decertifiedAt),
+            gt(staffLocations.decertifiedAt, new Date()),
+          ),
+        ),
+      );
   }
 
   async create(user: AuthUser, input: LocationInput) {

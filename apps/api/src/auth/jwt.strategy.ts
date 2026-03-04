@@ -14,7 +14,12 @@ const cookieExtractor = (req: Request | undefined) => {
     .find((entry: string) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
   if (!tokenCookie) return null;
   const rawValue = tokenCookie.slice(AUTH_COOKIE_NAME.length + 1);
-  return rawValue ? decodeURIComponent(rawValue) : null;
+  if (!rawValue) return null;
+  try {
+    return decodeURIComponent(rawValue);
+  } catch {
+    return null;
+  }
 };
 
 @Injectable()

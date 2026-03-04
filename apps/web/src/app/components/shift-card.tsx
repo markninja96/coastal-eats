@@ -36,6 +36,7 @@ export function ShiftCard({
   className,
   ...props
 }: ShiftCardProps) {
+  const ACTIONS_WIDTH = '420px';
   return (
     <Card className={className} {...props}>
       <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start">
@@ -56,11 +57,7 @@ export function ShiftCard({
               <CalendarClock className="h-4 w-4" />
               {timeRange}
             </span>
-            {warning ? (
-              <Badge className="bg-amber-500/20 text-amber-200">
-                {warning}
-              </Badge>
-            ) : null}
+            {warning ? <Badge variant="warning">{warning}</Badge> : null}
             <span className="inline-flex items-center gap-2">
               <MapPin className="h-4 w-4" />
               {location}
@@ -84,7 +81,11 @@ export function ShiftCard({
           ) : null}
         </div>
         {actions ? (
-          <div className="w-full md:ml-auto md:w-[420px] md:shrink-0">
+          // Keeps action controls aligned across shift cards.
+          <div
+            className="w-full md:ml-auto md:w-[var(--actions-width)] md:shrink-0"
+            style={{ '--actions-width': ACTIONS_WIDTH } as React.CSSProperties}
+          >
             {actions}
           </div>
         ) : null}

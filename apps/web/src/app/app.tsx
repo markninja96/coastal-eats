@@ -1,6 +1,5 @@
 import {
   Link,
-  Navigate,
   Outlet,
   useNavigate,
   useRouterState,
@@ -36,13 +35,10 @@ export function AppLayout() {
   const isLoading = status === 'loading';
   const signedInName = session?.user?.name ?? session?.user?.email;
   const protectedRoutes = new Set([
-    '/',
     ...PROTECTED_NAV.map((item) => item.to),
     ...ADMIN_NAV.map((item) => item.to),
   ]);
   const isProtectedRoute = protectedRoutes.has(pathname);
-  const redirectSearch = new URLSearchParams(location.search).toString();
-  const redirectTarget = `${pathname}${redirectSearch ? `?${redirectSearch}` : ''}`;
   const initials = signedInName
     ? signedInName
         .split(' ')
@@ -127,18 +123,12 @@ export function AppLayout() {
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-6 py-8">
-        {isProtectedRoute ? (
-          isLoading ? (
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-8 text-sm text-ink/70">
-                Checking session...
-              </div>
+        {isProtectedRoute && isLoading ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-8 text-sm text-ink/70">
+              Checking session...
             </div>
-          ) : session?.user ? (
-            <Outlet />
-          ) : (
-            <Navigate to="/login" search={{ redirect: redirectTarget }} />
-          )
+          </div>
         ) : (
           <Outlet />
         )}

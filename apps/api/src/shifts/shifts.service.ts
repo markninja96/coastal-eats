@@ -614,7 +614,7 @@ export class ShiftsService {
     ];
 
     const staffList = await this.database
-      .select({ id: users.id, name: users.name })
+      .selectDistinct({ id: users.id, name: users.name })
       .from(users)
       .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
       .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
@@ -660,7 +660,7 @@ export class ShiftsService {
     ];
 
     const baseQuery = dbClient
-      .select({ id: users.id, name: users.name })
+      .selectDistinct({ id: users.id, name: users.name })
       .from(users)
       .innerJoin(staffLocations, eq(staffLocations.staffId, users.id));
 

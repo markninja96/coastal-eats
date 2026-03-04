@@ -685,7 +685,7 @@ export function ScheduleRoute() {
       ) : null}
 
       <div className="grid gap-6">
-        {shifts.map((shift) => {
+        {shifts.map((shift, index) => {
           const durationMinutes = getDurationMinutes(
             shift.startAt,
             shift.endAt,
@@ -694,7 +694,11 @@ export function ScheduleRoute() {
             durationMinutes > WARN_DURATION_MINUTES
               ? 'Shift exceeds 8 hours'
               : undefined;
-          const shiftStaff = staffByShift.get(shift.id) ?? staff;
+          const availabilityLoading =
+            staffAvailabilityQueries[index]?.isLoading ?? false;
+          const shiftStaff = availabilityLoading
+            ? []
+            : (staffByShift.get(shift.id) ?? staff);
           const selectableStaff = shiftStaff.filter(
             (member) =>
               !('availability' in member) ||
@@ -765,7 +769,7 @@ export function ScheduleRoute() {
                     <select
                       className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
                       value={assignInputs[shift.id] ?? ''}
-                      disabled={!selectableStaff.length}
+                      disabled={availabilityLoading || !selectableStaff.length}
                       onChange={(event) =>
                         setAssignInputs((prev) => ({
                           ...prev,
@@ -774,9 +778,11 @@ export function ScheduleRoute() {
                       }
                     >
                       <option value="">
-                        {selectableStaff.length
-                          ? 'Select staff'
-                          : 'No available staff'}
+                        {availabilityLoading
+                          ? 'Loading availability...'
+                          : selectableStaff.length
+                            ? 'Select staff'
+                            : 'No available staff'}
                       </option>
                       {selectableStaff.map((member) => (
                         <option key={member.id} value={member.id}>
