@@ -1,0 +1,1 @@
+ALTER TABLE "shifts" ALTER COLUMN "required_skill_id" SET NOT NULL;

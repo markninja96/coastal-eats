@@ -43,6 +43,9 @@ CREATE TABLE "availability_windows" (
 CREATE TABLE "locations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"city" text,
+	"region" text,
+	"country" text,
 	"timezone" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -147,6 +150,13 @@ CREATE TABLE "users" (
 	"role" "user_role" NOT NULL,
 	"home_timezone" text NOT NULL,
 	"desired_weekly_hours" integer,
+	"password_hash" text,
+	"google_id" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_locations_name" ON "locations" USING btree ("name");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_shift_staff_active" ON "shift_assignments" USING btree ("shift_id","staff_id") WHERE "shift_assignments"."status" = 'assigned';--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_users_email" ON "users" USING btree ("email");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_users_google_id" ON "users" USING btree ("google_id");

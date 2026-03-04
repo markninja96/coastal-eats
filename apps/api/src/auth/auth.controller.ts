@@ -2,13 +2,21 @@ import {
   BadRequestException,
   Controller,
   Get,
+  HttpCode,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import { AuthService } from './auth.service';
+import {
+  AUTH_COOKIE_MAX_AGE_MS,
+  AUTH_COOKIE_NAME,
+  AUTH_COOKIE_OPTIONS,
+} from './auth.cookies';
 import { GoogleAuthGuard } from './google.guard';
 import { JwtAuthGuard } from './jwt.guard';
 
@@ -34,7 +42,10 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Req() req: { body: unknown }) {
+  async login(
+    @Req() req: { body: unknown },
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -52,7 +63,9 @@ export class AuthController {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.authService.login(user.id);
+    const session = await this.authService.login(user.id);
+    this.setAuthCookie(res, session.token);
+    return { user: session.user };
   }
 
   @Get('me')
@@ -72,7 +85,10 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Req() req: { body: unknown }) {
+  async register(
+    @Req() req: { body: unknown },
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -81,11 +97,13 @@ export class AuthController {
       });
     }
 
-    return this.authService.register(
+    const session = await this.authService.register(
       parsed.data.name,
       parsed.data.email,
       parsed.data.password,
     );
+    this.setAuthCookie(res, session.token);
+    return { user: session.user };
   }
 
   @Get('google')
@@ -96,7 +114,35 @@ export class AuthController {
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
-  async googleCallback(@Req() req: { user: { id: string } }) {
-    return this.authService.login(req.user.id);
+  async googleCallback(
+    @Req() req: { user: { id: string } },
+    @Res() res: Response,
+  ) {
+    const session = await this.authService.login(req.user.id);
+    this.setAuthCookie(res, session.token);
+    return res.redirect(this.getFrontendRedirectUrl());
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie(AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS);
+    return;
+  }
+
+  private setAuthCookie(res: Response, token: string) {
+    res.cookie(AUTH_COOKIE_NAME, token, {
+      ...AUTH_COOKIE_OPTIONS,
+      maxAge: AUTH_COOKIE_MAX_AGE_MS,
+    });
+  }
+
+  private getFrontendRedirectUrl() {
+    const frontendUrl =
+      process.env.WEB_APP_URL ||
+      process.env.FRONTEND_URL ||
+      'http://localhost:4200';
+    const normalizedBase = frontendUrl.replace(/\/$/, '');
+    return `${normalizedBase}/`;
   }
 }

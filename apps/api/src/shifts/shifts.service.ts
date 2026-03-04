@@ -27,8 +27,9 @@ type ShiftInput = {
   locationId: string;
   startAt: Date;
   endAt: Date;
-  requiredSkillId?: string | null;
+  requiredSkillId: string;
   headcount: number;
+  title: string;
   notes?: string | null;
 };
 
@@ -47,6 +48,9 @@ type Suggestion = {
 @Injectable()
 export class ShiftsService {
   constructor(@Inject(DB) private readonly database: typeof db) {}
+  private readonly minStartMinutes = 30;
+  private readonly minDurationMinutes = 30;
+  private readonly maxDurationMinutes = 12 * 60;
 
   private async assertLocationAccess(user: AuthUser, locationId: string) {
     if (user.role === 'admin') return;
@@ -79,6 +83,26 @@ export class ShiftsService {
     }
   }
 
+  private assertShiftTiming(startAt: Date, endAt: Date) {
+    const minStart = Date.now() + this.minStartMinutes * 60 * 1000;
+    if (startAt.getTime() < minStart) {
+      throw new BadRequestException(
+        'Shift start must be at least 30 minutes from now',
+      );
+    }
+
+    const diffMinutes = (endAt.getTime() - startAt.getTime()) / 60000;
+    if (diffMinutes <= 0) {
+      throw new BadRequestException('Shift end must be after start');
+    }
+    if (diffMinutes < this.minDurationMinutes) {
+      throw new BadRequestException('Shift must be at least 30 minutes');
+    }
+    if (diffMinutes > this.maxDurationMinutes) {
+      throw new BadRequestException('Shift cannot exceed 12 hours');
+    }
+  }
+
   async list(
     user: AuthUser,
     params: { locationId?: string; start?: Date; end?: Date },
@@ -105,15 +129,56 @@ export class ShiftsService {
       ? conditions.reduce((acc, clause) => (acc ? and(acc, clause) : clause))
       : undefined;
 
-    const query = this.database.select().from(shifts);
-    return whereClause ? query.where(whereClause) : query;
+    const query = this.database
+      .select({
+        shift: shifts,
+        assignment: shiftAssignments,
+        staff: users,
+      })
+      .from(shifts)
+      .leftJoin(shiftAssignments, eq(shiftAssignments.shiftId, shifts.id))
+      .leftJoin(users, eq(shiftAssignments.staffId, users.id));
+
+    const rows = whereClause ? await query.where(whereClause) : await query;
+    const byId = new Map<
+      string,
+      typeof shifts.$inferSelect & {
+        assignments: Array<{
+          id: string;
+          staffId: string;
+          staffName: string;
+          status: string;
+        }>;
+      }
+    >();
+
+    rows.forEach((row) => {
+      const shift = row.shift;
+      const existing = byId.get(shift.id) ?? {
+        ...shift,
+        assignments: [],
+      };
+      if (
+        row.assignment?.id &&
+        row.staff?.id &&
+        row.assignment.status === 'assigned'
+      ) {
+        existing.assignments.push({
+          id: row.assignment.id,
+          staffId: row.assignment.staffId,
+          staffName: row.staff.name,
+          status: row.assignment.status,
+        });
+      }
+      byId.set(shift.id, existing);
+    });
+
+    return Array.from(byId.values());
   }
 
   async create(user: AuthUser, input: ShiftInput) {
     await this.assertLocationAccess(user, input.locationId);
-    if (input.endAt <= input.startAt) {
-      throw new BadRequestException('Shift end must be after start');
-    }
+    this.assertShiftTiming(input.startAt, input.endAt);
 
     const [created] = await this.database
       .insert(shifts)
@@ -121,9 +186,10 @@ export class ShiftsService {
         locationId: input.locationId,
         startAt: input.startAt,
         endAt: input.endAt,
-        requiredSkillId: input.requiredSkillId ?? null,
+        requiredSkillId: input.requiredSkillId,
         headcount: input.headcount,
         status: 'draft',
+        title: input.title,
         notes: input.notes ?? null,
         createdBy: user.id,
         updatedBy: user.id,
@@ -151,9 +217,7 @@ export class ShiftsService {
 
     const nextStart = input.startAt ?? existing.startAt;
     const nextEnd = input.endAt ?? existing.endAt;
-    if (nextEnd <= nextStart) {
-      throw new BadRequestException('Shift end must be after start');
-    }
+    this.assertShiftTiming(nextStart, nextEnd);
 
     const [updated] = await this.database
       .update(shifts)
@@ -166,6 +230,7 @@ export class ShiftsService {
             ? input.requiredSkillId
             : existing.requiredSkillId,
         headcount: input.headcount ?? existing.headcount,
+        title: input.title ?? existing.title,
         notes: input.notes ?? existing.notes,
         updatedBy: user.id,
         updatedAt: new Date(),
@@ -535,6 +600,56 @@ export class ShiftsService {
     }
 
     return { available: true };
+  }
+
+  async listStaffAvailability(user: AuthUser, shiftId: string) {
+    const shift = await this.getShiftOrThrow(shiftId);
+    await this.assertLocationAccess(user, shift.locationId);
+
+    const baseConditions = [
+      eq(users.role, 'staff'),
+      eq(staffLocations.locationId, shift.locationId),
+      or(
+        isNull(staffLocations.decertifiedAt),
+        gt(staffLocations.decertifiedAt, shift.endAt),
+      ),
+    ];
+
+    const staffList = shift.requiredSkillId
+      ? await this.database
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+          .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
+          .where(
+            and(
+              ...baseConditions,
+              eq(staffSkills.skillId, shift.requiredSkillId),
+            ),
+          )
+      : await this.database
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+          .where(and(...baseConditions));
+
+    const results = await Promise.all(
+      staffList.map(async (staff: { id: string; name: string }) => {
+        const availability = await this.checkAvailability(
+          this.database,
+          staff.id,
+          shift,
+        );
+        return {
+          id: staff.id,
+          name: staff.name,
+          availability: availability.available ? 'available' : 'unavailable',
+          reason: availability.reason,
+        };
+      }),
+    );
+
+    return results;
   }
 
   private async suggestStaff(
