@@ -35,11 +35,16 @@ export function AppLayout() {
   const pathname = location.pathname;
   const isLoading = status === 'loading';
   const signedInName = session?.user?.name ?? session?.user?.email;
-  const protectedRoutes = new Set([
+  const protectedRoutes = [
     ...PROTECTED_NAV.map((item) => item.to),
     ...ADMIN_NAV.map((item) => item.to),
-  ]);
-  const isProtectedRoute = protectedRoutes.has(pathname);
+  ];
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    // Prefix match so protected base paths cover nested routes.
+    route === '/'
+      ? pathname === '/'
+      : pathname === route || pathname.startsWith(`${route}/`),
+  );
   const initials = signedInName
     ? signedInName
         .split(' ')

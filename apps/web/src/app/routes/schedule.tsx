@@ -219,6 +219,7 @@ export function ScheduleRoute() {
   const [lastCreateWarning, setLastCreateWarning] = useState('');
   const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState<AssignmentError | null>(null);
+  const [isPublishingBatch, setIsPublishingBatch] = useState(false);
   const shiftValidation = useMemo(
     () => getShiftValidation(newShift),
     [newShift],
@@ -300,14 +301,14 @@ export function ScheduleRoute() {
       });
       setShowValidation(false);
       void queryClient.invalidateQueries({
-        queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
+        queryKey: ['shifts'],
       });
     },
   });
 
   const invalidateShifts = () =>
     queryClient.invalidateQueries({
-      queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
+      queryKey: ['shifts'],
     });
 
   const publishMutation = useMutation({
@@ -395,7 +396,8 @@ export function ScheduleRoute() {
   });
 
   const draftShifts = shifts.filter((shift) => shift.status === 'draft');
-  const publishWeekDisabled = !draftShifts.length || publishMutation.isPending;
+  const publishWeekDisabled =
+    !draftShifts.length || publishMutation.isPending || isPublishingBatch;
   const canLoad = Boolean(canFetch && activeLocationId);
   const showEmpty =
     canLoad && !shifts.length && !shiftsQuery.isLoading && !shiftsQuery.isError;
@@ -424,11 +426,13 @@ export function ScheduleRoute() {
 
   const handlePublishWeek = async () => {
     if (!draftShifts.length) return;
+    setIsPublishingBatch(true);
     try {
       await Promise.allSettled(
         draftShifts.map((shift) => publishMutation.mutateAsync(shift.id)),
       );
     } finally {
+      setIsPublishingBatch(false);
       void invalidateShifts();
     }
   };
@@ -800,7 +804,7 @@ export function ScheduleRoute() {
                         onSuccess: () => void invalidateShifts(),
                       })
                     }
-                    disabled={publishMutation.isPending}
+                    disabled={publishMutation.isPending || isPublishingBatch}
                   >
                     <UploadCloud className="h-4 w-4" />
                     Publish
@@ -815,7 +819,7 @@ export function ScheduleRoute() {
                         onSuccess: () => void invalidateShifts(),
                       })
                     }
-                    disabled={unpublishMutation.isPending}
+                    disabled={unpublishMutation.isPending || isPublishingBatch}
                   >
                     <Undo2 className="h-4 w-4" />
                     Unpublish

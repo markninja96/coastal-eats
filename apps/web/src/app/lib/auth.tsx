@@ -169,7 +169,7 @@ export function useAuth(): AuthContextValue {
   const queryClient = useQueryClient();
 
   const status: AuthContextValue['status'] =
-    bootstrap.isFetching || loginPending || registerPending
+    bootstrap.isPending || loginPending || registerPending
       ? 'loading'
       : session?.user
         ? 'ready'
