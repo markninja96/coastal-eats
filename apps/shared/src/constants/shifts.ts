@@ -2,6 +2,7 @@ export const MIN_START_MINUTES = 30;
 export const MIN_DURATION_MINUTES = 30;
 export const WARN_DURATION_MINUTES = 8 * 60;
 export const MAX_DURATION_MINUTES = 12 * 60;
+export const MIN_REST_PERIOD_MS = 10 * 60 * 60 * 1000;
 
 const formatDuration = (minutes: number) => {
   if (minutes % 60 === 0) {

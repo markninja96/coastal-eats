@@ -22,8 +22,12 @@ import {
 } from '../db/schema';
 import type { AuthUser } from '../auth/auth.types';
 import {
+  getShiftMaxDurationMessage,
+  getShiftMinDurationMessage,
+  getShiftMinStartMessage,
   MAX_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
+  MIN_REST_PERIOD_MS,
   MIN_START_MINUTES,
 } from './shifts.constants';
 
@@ -89,9 +93,7 @@ export class ShiftsService {
   private assertShiftTiming(startAt: Date, endAt: Date) {
     const minStart = Date.now() + MIN_START_MINUTES * 60 * 1000;
     if (startAt.getTime() < minStart) {
-      throw new BadRequestException(
-        'Shift start must be at least 30 minutes from now',
-      );
+      throw new BadRequestException(getShiftMinStartMessage());
     }
 
     const diffMinutes = (endAt.getTime() - startAt.getTime()) / 60000;
@@ -99,10 +101,10 @@ export class ShiftsService {
       throw new BadRequestException('Shift end must be after start');
     }
     if (diffMinutes < MIN_DURATION_MINUTES) {
-      throw new BadRequestException('Shift must be at least 30 minutes');
+      throw new BadRequestException(getShiftMinDurationMessage());
     }
     if (diffMinutes > MAX_DURATION_MINUTES) {
-      throw new BadRequestException('Shift cannot exceed 12 hours');
+      throw new BadRequestException(getShiftMaxDurationMessage());
     }
   }
 
@@ -475,8 +477,8 @@ export class ShiftsService {
       });
     }
 
-    const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
-    const windowEnd = new Date(shift.endAt.getTime() + 10 * 60 * 60 * 1000);
+    const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
+    const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
     const assignments = await dbClient
       .select({
         startAt: shifts.startAt,
@@ -841,10 +843,16 @@ export class ShiftsService {
         and(...baseConditions, eq(staffSkills.skillId, shift.requiredSkillId)),
       );
 
+    const staffIds = staffList.map((staff) => staff.id);
     const availabilityByStaff = await this.bulkCheckAvailability(
       this.database,
       shift,
-      staffList.map((staff) => staff.id),
+      staffIds,
+    );
+    const assignmentsByStaff = await this.bulkFetchAssignmentsForStaff(
+      this.database,
+      staffIds,
+      shift,
     );
 
     const results = await Promise.all(
@@ -853,9 +861,20 @@ export class ShiftsService {
           available: false,
           reason: 'No availability window for this time',
         };
-        const conflict = availability.available
-          ? await this.checkAssignmentConflicts(this.database, staff.id, shift)
-          : null;
+        let conflict = null as { reason: string } | null;
+        if (availability.available) {
+          const assignments = assignmentsByStaff.get(staff.id) ?? [];
+          for (const assignment of assignments) {
+            const violation = this.checkOverlapOrRestViolation(
+              assignment,
+              shift,
+            );
+            if (violation) {
+              conflict = { reason: violation.message };
+              break;
+            }
+          }
+        }
         const isAvailable = availability.available && !conflict;
         return {
           id: staff.id,
@@ -869,15 +888,22 @@ export class ShiftsService {
     return results;
   }
 
-  private async checkAssignmentConflicts(
+  private async bulkFetchAssignmentsForStaff(
     dbClient: DbClient,
-    staffId: string,
+    staffIds: string[],
     shift: typeof shifts.$inferSelect,
   ) {
-    const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
-    const windowEnd = new Date(shift.endAt.getTime() + 10 * 60 * 60 * 1000);
+    const assignmentsByStaff = new Map<
+      string,
+      Array<{ startAt: Date; endAt: Date }>
+    >();
+    if (!staffIds.length) return assignmentsByStaff;
+
+    const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
+    const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
     const assignments = await dbClient
       .select({
+        staffId: shiftAssignments.staffId,
         startAt: shifts.startAt,
         endAt: shifts.endAt,
       })
@@ -885,24 +911,20 @@ export class ShiftsService {
       .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
       .where(
         and(
-          eq(shiftAssignments.staffId, staffId),
+          inArray(shiftAssignments.staffId, staffIds),
           eq(shiftAssignments.status, 'assigned'),
           lte(shifts.startAt, windowEnd),
           gte(shifts.endAt, windowStart),
         ),
       );
 
-    for (const assignment of assignments) {
-      const violation = this.checkOverlapOrRestViolation(assignment, shift);
-      if (violation) {
-        return {
-          available: false,
-          reason: violation.message,
-        };
-      }
-    }
+    assignments.forEach((assignment) => {
+      const list = assignmentsByStaff.get(assignment.staffId) ?? [];
+      list.push({ startAt: assignment.startAt, endAt: assignment.endAt });
+      assignmentsByStaff.set(assignment.staffId, list);
+    });
 
-    return null;
+    return assignmentsByStaff;
   }
 
   private checkOverlapOrRestViolation(
@@ -920,12 +942,10 @@ export class ShiftsService {
 
     const restBefore =
       assignment.endAt <= shift.startAt &&
-      shift.startAt.getTime() - assignment.endAt.getTime() <
-        10 * 60 * 60 * 1000;
+      shift.startAt.getTime() - assignment.endAt.getTime() < MIN_REST_PERIOD_MS;
     const restAfter =
       assignment.startAt >= shift.endAt &&
-      assignment.startAt.getTime() - shift.endAt.getTime() <
-        10 * 60 * 60 * 1000;
+      assignment.startAt.getTime() - shift.endAt.getTime() < MIN_REST_PERIOD_MS;
     if (restBefore || restAfter) {
       return {
         code: 'rest',
