@@ -232,12 +232,12 @@ export class ShiftsService {
     if (input.locationId && input.locationId !== existing.locationId) {
       await this.assertLocationAccess(user, input.locationId);
     }
-    if (existing.status === 'published') {
-      this.assertCutoff(existing.startAt);
-    }
 
     const nextStart = input.startAt ?? existing.startAt;
     const nextEnd = input.endAt ?? existing.endAt;
+    if (existing.status === 'published') {
+      this.assertCutoff(nextStart);
+    }
     if (input.startAt || input.endAt) {
       this.assertShiftTiming(nextStart, nextEnd);
     }
@@ -539,7 +539,7 @@ export class ShiftsService {
       .limit(1);
     const timezone = location?.timezone || 'UTC';
 
-    const { shiftDate, shiftDay } = this.getShiftDateInfo(shift, timezone);
+    const { shiftDays } = this.getShiftDateInfo(shift, timezone);
 
     const exceptions = await dbClient
       .select()
@@ -558,16 +558,11 @@ export class ShiftsService {
       .where(
         and(
           eq(availabilityWindows.staffId, staffId),
-          eq(availabilityWindows.dayOfWeek, shiftDay),
+          inArray(availabilityWindows.dayOfWeek, shiftDays),
         ),
       );
 
-    return this.evaluateStaffAvailability(
-      shift,
-      shiftDate,
-      exceptions,
-      windows,
-    );
+    return this.evaluateStaffAvailability(shift, exceptions, windows);
   }
 
   private async bulkCheckAvailability(
@@ -585,7 +580,7 @@ export class ShiftsService {
       .limit(1);
     const timezone = location?.timezone || 'UTC';
 
-    const { shiftDate, shiftDay } = this.getShiftDateInfo(shift, timezone);
+    const { shiftDays } = this.getShiftDateInfo(shift, timezone);
 
     const exceptions = await dbClient
       .select()
@@ -604,7 +599,7 @@ export class ShiftsService {
       .where(
         and(
           inArray(availabilityWindows.staffId, staffIds),
-          eq(availabilityWindows.dayOfWeek, shiftDay),
+          inArray(availabilityWindows.dayOfWeek, shiftDays),
         ),
       );
 
@@ -627,7 +622,6 @@ export class ShiftsService {
       const staffWindows = windowsByStaff.get(staffId) ?? [];
       const availability = this.evaluateStaffAvailability(
         shift,
-        shiftDate,
         staffExceptions,
         staffWindows,
       );
@@ -646,48 +640,127 @@ export class ShiftsService {
     }).format(date);
   }
 
-  private toTimeKey(date: Date, timeZone: string) {
-    return (
-      new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(date) + ':00'
+  private getLocalDateParts(date: Date, timeZone: string) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+    const values: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') values[part.type] = Number(part.value);
+    }
+    return {
+      year: values.year,
+      month: values.month,
+      day: values.day,
+      hour: values.hour,
+      minute: values.minute,
+      second: values.second,
+    };
+  }
+
+  private getLocalTimestamp(date: Date, timeZone: string) {
+    const parts = this.getLocalDateParts(date, timeZone);
+    return Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
     );
+  }
+
+  private parseTimeParts(value: string) {
+    const [hour, minute, second] = value.split(':').map(Number);
+    return {
+      hour: Number.isFinite(hour) ? hour : 0,
+      minute: Number.isFinite(minute) ? minute : 0,
+      second: Number.isFinite(second) ? second : 0,
+    };
   }
 
   private getShiftDateInfo(
     shift: typeof shifts.$inferSelect,
     timeZone: string,
   ) {
-    const shiftDate = this.toDateKey(shift.startAt, timeZone);
-    const [month, day, year] = shiftDate.split('/').map(Number);
-    const shiftDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    return { shiftDate, shiftDay };
+    const startDate = this.toDateKey(shift.startAt, timeZone);
+    const endDate = this.toDateKey(shift.endAt, timeZone);
+    const dateKeys = new Set([startDate, endDate]);
+    const shiftDays = Array.from(dateKeys).map((dateKey) => {
+      const [month, day, year] = dateKey.split('/').map(Number);
+      return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    });
+    return { shiftDays };
   }
 
   private evaluateStaffAvailability(
     shift: typeof shifts.$inferSelect,
-    shiftDate: string,
     exceptions: Array<typeof availabilityExceptions.$inferSelect>,
     windows: Array<typeof availabilityWindows.$inferSelect>,
   ) {
     const exceptionHit = exceptions.find((exception) => {
       const exceptionDate = this.toDateKey(exception.date, exception.timezone);
-      if (exceptionDate !== shiftDate) return false;
+      const shiftDateKeys = new Set([
+        this.toDateKey(shift.startAt, exception.timezone),
+        this.toDateKey(shift.endAt, exception.timezone),
+      ]);
+      if (!shiftDateKeys.has(exceptionDate)) return false;
       if (exception.locationId && exception.locationId !== shift.locationId) {
         return false;
       }
-      if (!exception.startTime || !exception.endTime) return true;
-      const shiftStartKey = this.toTimeKey(shift.startAt, exception.timezone);
-      const shiftEndKey = this.toTimeKey(shift.endAt, exception.timezone);
+      const shiftStartMs = this.getLocalTimestamp(
+        shift.startAt,
+        exception.timezone,
+      );
+      let shiftEndMs = this.getLocalTimestamp(shift.endAt, exception.timezone);
+      if (shiftEndMs <= shiftStartMs) {
+        shiftEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      const exceptionDateParts = this.getLocalDateParts(
+        exception.date,
+        exception.timezone,
+      );
+      const exceptionStartParts = exception.startTime
+        ? this.parseTimeParts(exception.startTime)
+        : { hour: 0, minute: 0, second: 0 };
+      const exceptionEndParts = exception.endTime
+        ? this.parseTimeParts(exception.endTime)
+        : { hour: 24, minute: 0, second: 0 };
+      const exceptionStartMs = Date.UTC(
+        exceptionDateParts.year,
+        exceptionDateParts.month - 1,
+        exceptionDateParts.day,
+        exceptionStartParts.hour,
+        exceptionStartParts.minute,
+        exceptionStartParts.second,
+      );
+      let exceptionEndMs = Date.UTC(
+        exceptionDateParts.year,
+        exceptionDateParts.month - 1,
+        exceptionDateParts.day,
+        exceptionEndParts.hour,
+        exceptionEndParts.minute,
+        exceptionEndParts.second,
+      );
+      if (exceptionEndMs <= exceptionStartMs) {
+        exceptionEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      if (!exception.startTime || !exception.endTime) {
+        return true;
+      }
       const overlaps =
-        exception.startTime <= shiftEndKey &&
-        exception.endTime >= shiftStartKey;
+        exceptionStartMs <= shiftEndMs && exceptionEndMs >= shiftStartMs;
       const fullyCovers =
-        exception.startTime <= shiftStartKey &&
-        exception.endTime >= shiftEndKey;
+        exceptionStartMs <= shiftStartMs && exceptionEndMs >= shiftEndMs;
       if (exception.type === 'unavailable') return overlaps;
       return fullyCovers;
     });
@@ -703,9 +776,53 @@ export class ShiftsService {
       if (window.locationId && window.locationId !== shift.locationId) {
         return false;
       }
-      const shiftStartKey = this.toTimeKey(shift.startAt, window.timezone);
-      const shiftEndKey = this.toTimeKey(shift.endAt, window.timezone);
-      return window.startTime <= shiftStartKey && window.endTime >= shiftEndKey;
+      const shiftStartMs = this.getLocalTimestamp(
+        shift.startAt,
+        window.timezone,
+      );
+      let shiftEndMs = this.getLocalTimestamp(shift.endAt, window.timezone);
+      if (shiftEndMs <= shiftStartMs) {
+        shiftEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      const startParts = this.getLocalDateParts(shift.startAt, window.timezone);
+      const endParts = this.getLocalDateParts(shift.endAt, window.timezone);
+      const startDay = new Date(
+        Date.UTC(startParts.year, startParts.month - 1, startParts.day),
+      ).getUTCDay();
+      const endDay = new Date(
+        Date.UTC(endParts.year, endParts.month - 1, endParts.day),
+      ).getUTCDay();
+      const windowDate =
+        window.dayOfWeek === endDay || window.dayOfWeek === startDay
+          ? window.dayOfWeek === endDay
+            ? endParts
+            : startParts
+          : startParts;
+
+      const windowStartParts = this.parseTimeParts(window.startTime);
+      const windowEndParts = this.parseTimeParts(window.endTime);
+      const windowStartMs = Date.UTC(
+        windowDate.year,
+        windowDate.month - 1,
+        windowDate.day,
+        windowStartParts.hour,
+        windowStartParts.minute,
+        windowStartParts.second,
+      );
+      let windowEndMs = Date.UTC(
+        windowDate.year,
+        windowDate.month - 1,
+        windowDate.day,
+        windowEndParts.hour,
+        windowEndParts.minute,
+        windowEndParts.second,
+      );
+      if (windowEndMs <= windowStartMs) {
+        windowEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      return windowStartMs <= shiftStartMs && windowEndMs >= shiftEndMs;
     });
 
     if (!matchingWindow) {
@@ -758,15 +875,71 @@ export class ShiftsService {
         available: false,
         reason: 'No availability window for this time',
       };
+      const conflict = availability.available
+        ? await this.checkAssignmentConflicts(this.database, staff.id, shift)
+        : null;
+      const isAvailable = availability.available && !conflict;
       results.push({
         id: staff.id,
         name: staff.name,
-        availability: availability.available ? 'available' : 'unavailable',
-        reason: availability.reason,
+        availability: isAvailable ? 'available' : 'unavailable',
+        reason: conflict ? conflict.reason : availability.reason,
       });
     }
 
     return results;
+  }
+
+  private async checkAssignmentConflicts(
+    dbClient: DbClient,
+    staffId: string,
+    shift: typeof shifts.$inferSelect,
+  ) {
+    const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
+    const windowEnd = new Date(shift.endAt.getTime() + 10 * 60 * 60 * 1000);
+    const assignments = await dbClient
+      .select({
+        startAt: shifts.startAt,
+        endAt: shifts.endAt,
+      })
+      .from(shiftAssignments)
+      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+      .where(
+        and(
+          eq(shiftAssignments.staffId, staffId),
+          eq(shiftAssignments.status, 'assigned'),
+          lte(shifts.startAt, windowEnd),
+          gte(shifts.endAt, windowStart),
+        ),
+      );
+
+    for (const assignment of assignments) {
+      const overlaps =
+        assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
+      if (overlaps) {
+        return {
+          available: false,
+          reason: 'Staff is already assigned to an overlapping shift',
+        };
+      }
+
+      const restBefore =
+        assignment.endAt <= shift.startAt &&
+        shift.startAt.getTime() - assignment.endAt.getTime() <
+          10 * 60 * 60 * 1000;
+      const restAfter =
+        assignment.startAt >= shift.endAt &&
+        assignment.startAt.getTime() - shift.endAt.getTime() <
+          10 * 60 * 60 * 1000;
+      if (restBefore || restAfter) {
+        return {
+          available: false,
+          reason: 'Staff does not have 10 hours between shifts',
+        };
+      }
+    }
+
+    return null;
   }
 
   private async suggestStaff(
