@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "composite": true,
     "declaration": true,
     "declarationMap": true,
@@ -16,6 +17,10 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@coastal-eats/source"]
+    "customConditions": ["@coastal-eats/source"],
+    "paths": {
+      "@coastal-eats/shared": ["apps/shared/src/index.ts"],
+      "@coastal-eats/shared/*": ["apps/shared/src/*"]
+    }
   }
 }

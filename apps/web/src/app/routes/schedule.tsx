@@ -261,6 +261,8 @@ export function ScheduleRoute() {
   const [showValidation, setShowValidation] = useState(false);
   const [lastCreateWarning, setLastCreateWarning] = useState('');
   const [createError, setCreateError] = useState('');
+  const [publishError, setPublishError] = useState('');
+  const [unpublishError, setUnpublishError] = useState('');
   const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState<AssignmentError | null>(null);
   const [isPublishingBatch, setIsPublishingBatch] = useState(false);
@@ -382,10 +384,26 @@ export function ScheduleRoute() {
 
   const publishMutation = useMutation({
     mutationFn: (shiftId: string) => publishShift(shiftId),
+    onSuccess: () => setPublishError(''),
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to publish shift. Please try again.';
+      setPublishError(message);
+    },
   });
 
   const unpublishMutation = useMutation({
     mutationFn: (shiftId: string) => unpublishShift(shiftId),
+    onSuccess: () => setUnpublishError(''),
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to unpublish shift. Please try again.';
+      setUnpublishError(message);
+    },
   });
 
   const assignMutation = useMutation({
@@ -502,10 +520,26 @@ export function ScheduleRoute() {
   const handlePublishWeek = async () => {
     if (!draftShifts.length) return;
     setIsPublishingBatch(true);
+    setPublishError('');
     try {
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         draftShifts.map((shift) => publishMutation.mutateAsync(shift.id)),
       );
+      const failures = results
+        .map((result, index) => ({ result, shift: draftShifts[index] }))
+        .filter((entry) => entry.result.status === 'rejected');
+      if (failures.length) {
+        const details = failures
+          .map(({ shift, result }) => {
+            const reason =
+              result.status === 'rejected' && result.reason instanceof Error
+                ? result.reason.message
+                : 'Unknown error';
+            return `${shift.id}: ${reason}`;
+          })
+          .join('; ');
+        setPublishError(`Failed to publish shifts: ${details}`);
+      }
     } finally {
       setIsPublishingBatch(false);
       void invalidateShifts();
@@ -831,6 +865,22 @@ export function ScheduleRoute() {
             })) ?? []
           }
         />
+      ) : null}
+
+      {publishError ? (
+        <Card>
+          <CardBody className="text-sm text-rose-200/90">
+            {publishError}
+          </CardBody>
+        </Card>
+      ) : null}
+
+      {unpublishError ? (
+        <Card>
+          <CardBody className="text-sm text-rose-200/90">
+            {unpublishError}
+          </CardBody>
+        </Card>
       ) : null}
 
       <div className="grid gap-6">

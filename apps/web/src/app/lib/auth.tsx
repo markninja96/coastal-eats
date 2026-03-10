@@ -16,7 +16,7 @@ export type AuthSession = {
 
 export type AuthContextValue = {
   session: AuthSession | null;
-  status: 'idle' | 'loading' | 'ready';
+  status: 'idle' | 'loading' | 'ready' | 'failed';
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (
     name: string,
@@ -127,6 +127,7 @@ const useAuthStore = create<AuthStore>()(authStoreCreator);
 function useAuthBootstrap() {
   const setUser = useAuthStore((state) => state.setUser);
   const setSession = useAuthStore((state) => state.setSession);
+  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: ['auth', 'me'],
@@ -148,6 +149,11 @@ function useAuthBootstrap() {
         if (error instanceof ApiError && error.status === 401) {
           if (useAuthStore.getState().session === sessionSnapshot) {
             setSession(null);
+            ['locations', 'skills', 'staff', 'shifts', 'shift-staff'].forEach(
+              (key) => {
+                queryClient.removeQueries({ queryKey: [key] });
+              },
+            );
           }
           return null;
         }
@@ -171,12 +177,15 @@ export function useAuth(): AuthContextValue {
   const bootstrap = useAuthBootstrap();
   const queryClient = useQueryClient();
 
-  const status: AuthContextValue['status'] =
-    bootstrap.isPending || loginPending || registerPending
-      ? 'loading'
-      : session?.user
-        ? 'ready'
-        : 'idle';
+  const status: AuthContextValue['status'] = bootstrap.isPending
+    ? 'loading'
+    : bootstrap.isError
+      ? 'failed'
+      : loginPending || registerPending
+        ? 'loading'
+        : session?.user
+          ? 'ready'
+          : 'idle';
 
   return {
     session,
