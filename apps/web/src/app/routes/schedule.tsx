@@ -57,6 +57,9 @@ const addMinutes = (value: Date, minutes: number) =>
 
 const toMinutePrecision = (value: Date) => {
   const next = new Date(value);
+  if (next.getSeconds() > 0 || next.getMilliseconds() > 0) {
+    next.setMinutes(next.getMinutes() + 1);
+  }
   next.setSeconds(0, 0);
   return next;
 };
@@ -360,12 +363,21 @@ export function ScheduleRoute() {
     [locations],
   );
   const staffByShift = useMemo(() => {
-    const map = new Map<string, ShiftStaff[]>();
+    const map = new Map<
+      string,
+      {
+        data?: ShiftStaff[];
+        error?: unknown;
+      }
+    >();
     shifts.forEach((shift, index) => {
-      const data = staffAvailabilityQueries[index]?.data as
-        | ShiftStaff[]
-        | undefined;
-      map.set(shift.id, data ?? []);
+      const query = staffAvailabilityQueries[index];
+      if (!query) return;
+      const data = query.data as ShiftStaff[] | undefined;
+      map.set(shift.id, {
+        data: data ?? undefined,
+        error: query.isError ? query.error : undefined,
+      });
     });
     return map;
   }, [shifts, staffAvailabilityQueries]);
@@ -751,9 +763,12 @@ export function ScheduleRoute() {
               : undefined;
           const availabilityLoading =
             staffAvailabilityQueries[index]?.isLoading ?? false;
+          const availabilityEntry = staffByShift.get(shift.id);
+          const availabilityError = availabilityEntry?.error;
+          const availabilityData = availabilityEntry?.data;
           const shiftStaff = availabilityLoading
             ? []
-            : (staffByShift.get(shift.id) ?? staff);
+            : (availabilityData ?? staff);
           const selectableStaff = shiftStaff.filter(
             (member) =>
               !('availability' in member) ||
@@ -839,9 +854,11 @@ export function ScheduleRoute() {
                       <option value="">
                         {availabilityLoading
                           ? 'Loading availability...'
-                          : selectableStaff.length
-                            ? 'Select staff'
-                            : 'No available staff'}
+                          : availabilityError
+                            ? 'Availability unavailable'
+                            : selectableStaff.length
+                              ? 'Select staff'
+                              : 'No available staff'}
                       </option>
                       {selectableStaff.map((member) => (
                         <option key={member.id} value={member.id}>
@@ -850,26 +867,28 @@ export function ScheduleRoute() {
                       ))}
                     </select>
                   </div>
-                  {staffByShift.get(shift.id)?.length ? (
+                  {availabilityError && !availabilityLoading ? (
+                    <p className="text-xs text-rose-200/90">
+                      Availability check failed; showing all staff.
+                    </p>
+                  ) : null}
+                  {availabilityData?.length ? (
                     <div className="flex flex-wrap gap-2">
-                      {staffByShift
-                        .get(shift.id)
-                        ?.slice(0, 5)
-                        .map((member) => (
-                          <AvailabilityBadge
-                            key={member.id}
-                            status={
-                              member.availability === 'available'
-                                ? 'available'
-                                : 'unavailable'
-                            }
-                            label={
-                              member.availability === 'available'
-                                ? `${member.name} available`
-                                : `${member.name} unavailable`
-                            }
-                          />
-                        ))}
+                      {availabilityData.slice(0, 5).map((member) => (
+                        <AvailabilityBadge
+                          key={member.id}
+                          status={
+                            member.availability === 'available'
+                              ? 'available'
+                              : 'unavailable'
+                          }
+                          label={
+                            member.availability === 'available'
+                              ? `${member.name} available`
+                              : `${member.name} unavailable`
+                          }
+                        />
+                      ))}
                     </div>
                   ) : null}
                   <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">

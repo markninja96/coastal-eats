@@ -4,6 +4,7 @@ import {
   useNavigate,
   useRouterState,
 } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import { useAuth } from './lib/auth';
 
 type NavItem = {
@@ -114,7 +115,11 @@ export function AppLayout() {
                       await logout();
                       navigate({ to: '/login' });
                     } catch (error) {
-                      console.error('Failed to logout', error);
+                      const message =
+                        error instanceof Error
+                          ? error.message
+                          : 'Unable to sign out. Please try again.';
+                      toast.error(message);
                     }
                   }}
                   className="rounded-full border border-white/30 px-2 py-0.5 text-xs text-ink/70 hover:border-white/60"

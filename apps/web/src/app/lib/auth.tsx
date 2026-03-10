@@ -44,7 +44,7 @@ type AuthStore = {
     email: string,
     password: string,
   ) => Promise<void>;
-  logout: () => void;
+  clearSession: () => void;
 };
 
 const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
@@ -112,7 +112,7 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
       throw error;
     }
   },
-  logout: () =>
+  clearSession: () =>
     set({
       session: null,
       loginPending: false,
@@ -164,7 +164,7 @@ export function useAuth(): AuthContextValue {
   const registerPending = useAuthStore((state) => state.registerPending);
   const loginError = useAuthStore((state) => state.loginError);
   const registerError = useAuthStore((state) => state.registerError);
-  const logoutStore = useAuthStore((state) => state.logout);
+  const clearSession = useAuthStore((state) => state.clearSession);
   const bootstrap = useAuthBootstrap();
   const queryClient = useQueryClient();
 
@@ -187,11 +187,11 @@ export function useAuth(): AuthContextValue {
     logout: async () => {
       try {
         await apiFetch('/api/auth/logout', { method: 'POST' });
-        logoutStore();
+        clearSession();
         queryClient.removeQueries({ queryKey: ['auth'] });
       } catch (error) {
-        console.error('Failed to logout', error);
-        throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Logout failed: ${message}`);
       }
     },
   };
