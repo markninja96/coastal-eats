@@ -927,6 +927,9 @@ export function ScheduleRoute() {
           const availabilityEntry = staffByShift.get(shift.id);
           const availabilityError = availabilityEntry?.error;
           const availabilityData = availabilityEntry?.data;
+          const availabilityExtraCount = availabilityData
+            ? Math.max(0, availabilityData.length - 5)
+            : 0;
           const shiftStaff = availabilityLoading
             ? []
             : (availabilityData ?? staff);
@@ -1050,6 +1053,13 @@ export function ScheduleRoute() {
                           }
                         />
                       ))}
+                      {availabilityExtraCount > 0 ? (
+                        <AvailabilityBadge
+                          key={`availability-overflow-${shift.id}`}
+                          status="partial"
+                          label={`+${availabilityExtraCount} more`}
+                        />
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">

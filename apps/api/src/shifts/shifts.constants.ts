@@ -7,4 +7,4 @@ export {
   MIN_DURATION_MINUTES,
   MIN_START_MINUTES,
   WARN_DURATION_MINUTES,
-} from '@coastal-eats/shared/constants/shifts';
+} from '@coastal-eats/shared';

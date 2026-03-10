@@ -13,6 +13,7 @@ import {
   availabilityWindows,
   locations,
   managerLocations,
+  skills,
   shiftAssignments,
   shifts,
   staffLocations,
@@ -105,6 +106,17 @@ export class ShiftsService {
     }
   }
 
+  private async assertSkillExists(skillId: string) {
+    const [row] = await this.database
+      .select({ id: skills.id })
+      .from(skills)
+      .where(eq(skills.id, skillId))
+      .limit(1);
+    if (!row) {
+      throw new BadRequestException('Invalid required skill');
+    }
+  }
+
   async list(
     user: AuthUser,
     params: { locationId?: string; start?: Date; end?: Date },
@@ -187,6 +199,7 @@ export class ShiftsService {
   async create(user: AuthUser, input: ShiftInput) {
     await this.assertLocationAccess(user, input.locationId);
     this.assertShiftTiming(input.startAt, input.endAt);
+    await this.assertSkillExists(input.requiredSkillId);
 
     const [created] = await this.database
       .insert(shifts)
@@ -227,6 +240,13 @@ export class ShiftsService {
     const nextEnd = input.endAt ?? existing.endAt;
     if (input.startAt || input.endAt) {
       this.assertShiftTiming(nextStart, nextEnd);
+    }
+
+    if (
+      input.requiredSkillId &&
+      input.requiredSkillId !== existing.requiredSkillId
+    ) {
+      await this.assertSkillExists(input.requiredSkillId);
     }
 
     const [updated] = await this.database
