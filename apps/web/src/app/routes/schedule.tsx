@@ -23,6 +23,12 @@ import { listSkills } from '../lib/skills';
 import { listStaff } from '../lib/staff';
 import { formatTimezoneDisplay } from '../lib/timezones';
 import {
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  MIN_START_MINUTES,
+  WARN_DURATION_MINUTES,
+} from '../lib/shifts.constants';
+import {
   assignShift,
   createShift,
   listShifts,
@@ -35,10 +41,6 @@ import {
 } from '../lib/shifts';
 
 const WEEKLY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MIN_START_MINUTES = 30;
-const MIN_DURATION_MINUTES = 30;
-const WARN_DURATION_MINUTES = 8 * 60;
-const MAX_DURATION_MINUTES = 12 * 60;
 
 const toDateInput = (value: Date) => value.toLocaleDateString('en-CA');
 
@@ -62,6 +64,44 @@ const toMinutePrecision = (value: Date) => {
   }
   next.setSeconds(0, 0);
   return next;
+};
+
+const getTimeZoneOffsetMs = (date: Date, timeZone: string) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const parts = formatter.formatToParts(date);
+    const values: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') values[part.type] = part.value;
+    }
+    const utcDate = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour),
+      Number(values.minute),
+      Number(values.second),
+    );
+    return utcDate - date.getTime();
+  } catch {
+    return 0;
+  }
+};
+
+const toTimeZoneDate = (value: string, timeZone: string) => {
+  const base = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) return null;
+  const offsetMs = getTimeZoneOffsetMs(base, timeZone);
+  return new Date(base.getTime() - offsetMs);
 };
 
 const formatShiftDuration = (startAt: string, endAt: string) => {
@@ -106,28 +146,31 @@ const startOfWeek = (value: Date) => {
   return date;
 };
 
-const formatWeekLabel = (date: Date) =>
+const formatWeekLabel = (date: Date, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
+    timeZone,
   }).format(date);
 
-const formatTime = (value: string) =>
+const formatTime = (value: string, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    timeZone,
   }).format(new Date(value));
 
-const formatDay = (value: string) =>
-  new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(
+const formatDay = (value: string, timeZone: string) =>
+  new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(
     new Date(value),
   );
 
-const formatShiftDate = (value: string) =>
+const formatShiftDate = (value: string, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
+    timeZone,
   }).format(new Date(value));
 
 const parseAssignmentError = (error: unknown): AssignmentError | null => {
@@ -217,6 +260,7 @@ export function ScheduleRoute() {
   });
   const [showValidation, setShowValidation] = useState(false);
   const [lastCreateWarning, setLastCreateWarning] = useState('');
+  const [createError, setCreateError] = useState('');
   const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState<AssignmentError | null>(null);
   const [isPublishingBatch, setIsPublishingBatch] = useState(false);
@@ -233,20 +277,6 @@ export function ScheduleRoute() {
       )
     : minStartAt;
 
-  const weekStartDate = useMemo(() => {
-    if (!weekStart) return null;
-    const date = new Date(`${weekStart}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }, [weekStart]);
-  const weekEndDate = useMemo(() => {
-    if (!weekStartDate) return null;
-    const end = new Date(weekStartDate);
-    end.setDate(end.getDate() + 7);
-    return end;
-  }, [weekStartDate]);
-  const weekStartIso = weekStartDate?.toISOString() ?? '';
-  const weekEndIso = weekEndDate?.toISOString() ?? '';
-
   const locationsQuery = useQuery({
     queryKey: ['locations'],
     queryFn: () => listLocations(),
@@ -262,6 +292,27 @@ export function ScheduleRoute() {
   const locations = locationsQuery.data ?? [];
   const skills = skillsQuery.data ?? [];
   const activeLocationId = locationId || locations[0]?.id || '';
+  const activeLocation = useMemo(
+    () => locations.find((location) => location.id === activeLocationId),
+    [locations, activeLocationId],
+  );
+  const activeTimezone =
+    activeLocation?.timezone ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    'UTC';
+
+  const weekStartDate = useMemo(() => {
+    if (!weekStart) return null;
+    return toTimeZoneDate(weekStart, activeTimezone);
+  }, [weekStart, activeTimezone]);
+  const weekEndDate = useMemo(() => {
+    if (!weekStartDate) return null;
+    const end = new Date(weekStartDate);
+    end.setDate(end.getDate() + 7);
+    return end;
+  }, [weekStartDate]);
+  const weekStartIso = weekStartDate?.toISOString() ?? '';
+  const weekEndIso = weekEndDate?.toISOString() ?? '';
 
   const staffQuery = useQuery({
     queryKey: ['staff', activeLocationId],
@@ -284,6 +335,9 @@ export function ScheduleRoute() {
 
   const createMutation = useMutation({
     mutationFn: (input: ShiftInput) => createShift(input),
+    onMutate: () => {
+      setCreateError('');
+    },
     onSuccess: (response) => {
       const warnings = response?.warnings ?? [];
       setLastCreateWarning(
@@ -300,9 +354,24 @@ export function ScheduleRoute() {
         notes: '',
       });
       setShowValidation(false);
+      setCreateError('');
       void queryClient.invalidateQueries({
         queryKey: ['shifts'],
       });
+    },
+    onError: (error) => {
+      let message = 'Unable to create shift. Please try again.';
+      if (error instanceof ApiError && error.body) {
+        try {
+          const parsed = JSON.parse(error.body) as { message?: string };
+          if (parsed?.message) message = parsed.message;
+        } catch {
+          message = error.message || message;
+        }
+      } else if (error instanceof Error) {
+        message = error.message || message;
+      }
+      setCreateError(message);
     },
   });
 
@@ -357,7 +426,7 @@ export function ScheduleRoute() {
     })),
   });
   const weekLabel = weekStartDate
-    ? formatWeekLabel(weekStartDate)
+    ? formatWeekLabel(weekStartDate, activeTimezone)
     : 'Invalid week';
   const locationMap = useMemo(
     () => new Map(locations.map((location) => [location.id, location])),
@@ -386,9 +455,9 @@ export function ScheduleRoute() {
     const assignedCount = shift.assignments?.length ?? 0;
     return {
       id: shift.id,
-      day: formatDay(shift.startAt),
-      start: formatTime(shift.startAt),
-      end: formatTime(shift.endAt),
+      day: formatDay(shift.startAt, activeTimezone),
+      start: formatTime(shift.startAt, activeTimezone),
+      end: formatTime(shift.endAt, activeTimezone),
       title: shift.title || 'Shift',
       meta: `${assignedCount} of ${shift.headcount} filled`,
       status: shift.status,
@@ -399,8 +468,13 @@ export function ScheduleRoute() {
   const publishWeekDisabled =
     !draftShifts.length || publishMutation.isPending || isPublishingBatch;
   const canLoad = Boolean(canFetch && activeLocationId);
+  const hasValidWeek = Boolean(weekStartDate && weekEndDate);
   const showEmpty =
-    canLoad && !shifts.length && !shiftsQuery.isLoading && !shiftsQuery.isError;
+    canLoad &&
+    hasValidWeek &&
+    !shifts.length &&
+    !shiftsQuery.isLoading &&
+    !shiftsQuery.isError;
   const createDisabled =
     createMutation.isPending ||
     !activeLocationId ||
@@ -408,6 +482,7 @@ export function ScheduleRoute() {
     !newShift.requiredSkillId;
 
   const handleCreate = () => {
+    setCreateError('');
     setShowValidation(true);
     const validation = getShiftValidation(newShift);
     if (Object.keys(validation.errors).length) return;
@@ -682,6 +757,9 @@ export function ScheduleRoute() {
           <Button onClick={handleCreate} disabled={createDisabled}>
             Create shift
           </Button>
+          {createError ? (
+            <p className="mt-3 text-xs text-rose-200/90">{createError}</p>
+          ) : null}
           {shiftValidation.warnings.duration ? (
             <div className="mt-3">
               <Badge className="bg-amber-500/20 text-amber-200">
@@ -782,7 +860,7 @@ export function ScheduleRoute() {
             <ShiftCard
               key={shift.id}
               title={shift.title || 'Shift'}
-              timeRange={`${formatShiftDate(shift.startAt)} · ${formatTime(shift.startAt)} - ${formatTime(shift.endAt)} · ${formatShiftDuration(
+              timeRange={`${formatShiftDate(shift.startAt, activeTimezone)} · ${formatTime(shift.startAt, activeTimezone)} - ${formatTime(shift.endAt, activeTimezone)} · ${formatShiftDuration(
                 shift.startAt,
                 shift.endAt,
               )}`}

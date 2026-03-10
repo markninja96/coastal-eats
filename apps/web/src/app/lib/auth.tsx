@@ -139,6 +139,9 @@ function useAuthBootstrap() {
         if (!user) {
           throw new Error('Empty auth response');
         }
+        if (useAuthStore.getState().session !== sessionSnapshot) {
+          return null;
+        }
         setUser(user as AuthUser);
         return user;
       } catch (error) {
@@ -188,7 +191,16 @@ export function useAuth(): AuthContextValue {
       try {
         await apiFetch('/api/auth/logout', { method: 'POST' });
         clearSession();
-        queryClient.removeQueries({ queryKey: ['auth'] });
+        [
+          'auth',
+          'locations',
+          'skills',
+          'staff',
+          'shifts',
+          'shift-staff',
+        ].forEach((key) => {
+          queryClient.removeQueries({ queryKey: [key] });
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         throw new Error(`Logout failed: ${message}`);
