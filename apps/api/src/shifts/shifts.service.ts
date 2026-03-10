@@ -491,28 +491,9 @@ export class ShiftsService {
       );
 
     assignments.forEach((assignment) => {
-      const overlaps =
-        assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
-      if (overlaps) {
-        violations.push({
-          code: 'overlap',
-          message: 'Staff is already assigned to an overlapping shift',
-        });
-      }
-
-      const restBefore =
-        assignment.endAt <= shift.startAt &&
-        shift.startAt.getTime() - assignment.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      const restAfter =
-        assignment.startAt >= shift.endAt &&
-        assignment.startAt.getTime() - shift.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      if (restBefore || restAfter) {
-        violations.push({
-          code: 'rest',
-          message: 'Staff does not have 10 hours between shifts',
-        });
+      const violation = this.checkOverlapOrRestViolation(assignment, shift);
+      if (violation) {
+        violations.push(violation);
       }
     });
 
@@ -793,12 +774,12 @@ export class ShiftsService {
       const endDay = new Date(
         Date.UTC(endParts.year, endParts.month - 1, endParts.day),
       ).getUTCDay();
-      const windowDate =
-        window.dayOfWeek === endDay || window.dayOfWeek === startDay
-          ? window.dayOfWeek === endDay
-            ? endParts
-            : startParts
-          : startParts;
+      let windowDate = startParts;
+      if (window.dayOfWeek === endDay) {
+        windowDate = endParts;
+      } else if (window.dayOfWeek === startDay) {
+        windowDate = startParts;
+      }
 
       const windowStartParts = this.parseTimeParts(window.startTime);
       const windowEndParts = this.parseTimeParts(window.endTime);
@@ -914,29 +895,44 @@ export class ShiftsService {
       );
 
     for (const assignment of assignments) {
-      const overlaps =
-        assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
-      if (overlaps) {
+      const violation = this.checkOverlapOrRestViolation(assignment, shift);
+      if (violation) {
         return {
           available: false,
-          reason: 'Staff is already assigned to an overlapping shift',
+          reason: violation.message,
         };
       }
+    }
 
-      const restBefore =
-        assignment.endAt <= shift.startAt &&
-        shift.startAt.getTime() - assignment.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      const restAfter =
-        assignment.startAt >= shift.endAt &&
-        assignment.startAt.getTime() - shift.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      if (restBefore || restAfter) {
-        return {
-          available: false,
-          reason: 'Staff does not have 10 hours between shifts',
-        };
-      }
+    return null;
+  }
+
+  private checkOverlapOrRestViolation(
+    assignment: { startAt: Date; endAt: Date },
+    shift: typeof shifts.$inferSelect,
+  ) {
+    const overlaps =
+      assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
+    if (overlaps) {
+      return {
+        code: 'overlap',
+        message: 'Staff is already assigned to an overlapping shift',
+      } as const;
+    }
+
+    const restBefore =
+      assignment.endAt <= shift.startAt &&
+      shift.startAt.getTime() - assignment.endAt.getTime() <
+        10 * 60 * 60 * 1000;
+    const restAfter =
+      assignment.startAt >= shift.endAt &&
+      assignment.startAt.getTime() - shift.endAt.getTime() <
+        10 * 60 * 60 * 1000;
+    if (restBefore || restAfter) {
+      return {
+        code: 'rest',
+        message: 'Staff does not have 10 hours between shifts',
+      } as const;
     }
 
     return null;

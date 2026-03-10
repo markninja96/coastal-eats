@@ -870,13 +870,6 @@ export function ScheduleRoute() {
           {createError ? (
             <p className="mt-3 text-xs text-rose-200/90">{createError}</p>
           ) : null}
-          {shiftValidation.warnings.duration ? (
-            <div className="mt-3">
-              <Badge className="bg-amber-500/20 text-amber-200">
-                {shiftValidation.warnings.duration}
-              </Badge>
-            </div>
-          ) : null}
           {lastCreateWarning ? (
             <div className="mt-3">
               <Badge className="bg-amber-500/10 text-amber-200">
