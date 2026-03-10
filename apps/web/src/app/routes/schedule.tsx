@@ -115,6 +115,28 @@ const toTimeZoneDateTime = (value: string, timeZone: string) => {
   return new Date(base.getTime() - offsetMs);
 };
 
+const toTimeZoneDateTimeInput = (value: Date, timeZone: string) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(value);
+    const values: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') values[part.type] = part.value;
+    }
+    return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+  } catch {
+    return toDateTimeInput(value);
+  }
+};
+
 const addDaysToDateInput = (value: string, days: number) => {
   const base = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(base.getTime())) return null;
@@ -291,14 +313,6 @@ export function ScheduleRoute() {
   const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState<AssignmentError | null>(null);
   const [isPublishingBatch, setIsPublishingBatch] = useState(false);
-  const minStartAt = toDateTimeInput(
-    toMinutePrecision(addMinutes(new Date(), MIN_START_MINUTES)),
-  );
-  const minEndAt = newShift.startAt
-    ? toDateTimeInput(
-        addMinutes(new Date(newShift.startAt), MIN_DURATION_MINUTES),
-      )
-    : minStartAt;
 
   const locationsQuery = useQuery({
     queryKey: ['locations'],
@@ -312,17 +326,34 @@ export function ScheduleRoute() {
     enabled: canFetch,
   });
 
-  const locations = locationsQuery.data ?? [];
-  const skills = skillsQuery.data ?? [];
-  const activeLocationId = locationId || locations[0]?.id || '';
+  const locations = locationsQuery.data;
+  const skills = skillsQuery.data;
+  const locationsError = locationsQuery.isError;
+  const skillsError = skillsQuery.isError;
+  const activeLocationId = locationId || locations?.[0]?.id || '';
   const activeLocation = useMemo(
-    () => locations.find((location) => location.id === activeLocationId),
+    () => locations?.find((location) => location.id === activeLocationId),
     [locations, activeLocationId],
   );
   const activeTimezone =
     activeLocation?.timezone ||
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
     'UTC';
+
+  const minStartAt = toTimeZoneDateTimeInput(
+    toMinutePrecision(addMinutes(new Date(), MIN_START_MINUTES)),
+    activeTimezone,
+  );
+  const minEndAt = newShift.startAt
+    ? (() => {
+        const startAt = toTimeZoneDateTime(newShift.startAt, activeTimezone);
+        if (!startAt) return minStartAt;
+        return toTimeZoneDateTimeInput(
+          addMinutes(startAt, MIN_DURATION_MINUTES),
+          activeTimezone,
+        );
+      })()
+    : minStartAt;
 
   const shiftValidation = useMemo(
     () => getShiftValidation(newShift, activeTimezone),
@@ -473,7 +504,7 @@ export function ScheduleRoute() {
     ? formatWeekLabel(weekStartDate, activeTimezone)
     : 'Invalid week';
   const locationMap = useMemo(
-    () => new Map(locations.map((location) => [location.id, location])),
+    () => new Map((locations ?? []).map((location) => [location.id, location])),
     [locations],
   );
   const staffByShift = useMemo(() => {
@@ -625,15 +656,25 @@ export function ScheduleRoute() {
               id={locationSelectId}
               className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
               value={activeLocationId}
+              disabled={locationsQuery.isLoading || locationsError}
               onChange={(event) => setLocationId(event.target.value)}
             >
               <option value="">Select a location</option>
-              {locations.map((location) => (
+              {(locations ?? []).map((location) => (
                 <option key={location.id} value={location.id}>
-                  {location.name} · {formatTimezoneDisplay(location.timezone)}
+                  {location.name} ·{' '}
+                  {formatTimezoneDisplay(
+                    location.timezone,
+                    weekStartDate ?? undefined,
+                  )}
                 </option>
               ))}
             </select>
+            {locationsError ? (
+              <p className="text-xs text-rose-200/90">
+                Unable to load locations.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <label
@@ -754,6 +795,7 @@ export function ScheduleRoute() {
                 id={createSkillId}
                 className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
                 value={newShift.requiredSkillId}
+                disabled={skillsQuery.isLoading || skillsError}
                 onChange={(event) =>
                   setNewShift((prev) => ({
                     ...prev,
@@ -763,12 +805,17 @@ export function ScheduleRoute() {
                 onInput={() => setLastCreateWarning('')}
               >
                 <option value="">Select a skill</option>
-                {skills.map((skill) => (
+                {(skills ?? []).map((skill) => (
                   <option key={skill.id} value={skill.id}>
                     {skill.name}
                   </option>
                 ))}
               </select>
+              {skillsError ? (
+                <p className="text-xs text-rose-200/90">
+                  Unable to load skills.
+                </p>
+              ) : null}
               {showValidation && shiftValidation.errors.requiredSkillId ? (
                 <p className="text-xs text-rose-200/90">
                   {shiftValidation.errors.requiredSkillId}
