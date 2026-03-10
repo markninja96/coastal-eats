@@ -236,7 +236,10 @@ export class ShiftsService {
     const nextStart = input.startAt ?? existing.startAt;
     const nextEnd = input.endAt ?? existing.endAt;
     if (existing.status === 'published') {
-      this.assertCutoff(nextStart);
+      this.assertCutoff(existing.startAt);
+      if (input.startAt) {
+        this.assertCutoff(nextStart);
+      }
     }
     if (input.startAt || input.endAt) {
       this.assertShiftTiming(nextStart, nextEnd);

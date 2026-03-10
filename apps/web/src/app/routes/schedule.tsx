@@ -96,7 +96,13 @@ const getTimeZoneOffsetMs = (date: Date, timeZone: string) => {
       Number(values.second),
     );
     return utcDate - date.getTime();
-  } catch {
+  } catch (error) {
+    console.warn(
+      `Invalid time zone offset lookup for ${timeZone}: ${String(error)}`,
+    );
+    if (process.env.NODE_ENV !== 'production') {
+      throw error;
+    }
     return 0;
   }
 };
