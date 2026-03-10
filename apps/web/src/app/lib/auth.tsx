@@ -131,6 +131,7 @@ function useAuthBootstrap() {
   return useQuery({
     queryKey: ['auth', 'me'],
     queryFn: async () => {
+      const sessionSnapshot = useAuthStore.getState().session;
       try {
         const user = await apiFetch<AuthUser>('/api/auth/me', {
           method: 'GET',
@@ -142,7 +143,9 @@ function useAuthBootstrap() {
         return user;
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
+          if (useAuthStore.getState().session === sessionSnapshot) {
+            setSession(null);
+          }
           return null;
         }
         throw error;

@@ -109,9 +109,13 @@ export function AppLayout() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
-                    navigate({ to: '/login' });
+                  onClick={async () => {
+                    try {
+                      await logout();
+                      navigate({ to: '/login' });
+                    } catch (error) {
+                      console.error('Failed to logout', error);
+                    }
                   }}
                   className="rounded-full border border-white/30 px-2 py-0.5 text-xs text-ink/70 hover:border-white/60"
                 >

@@ -34,7 +34,7 @@ import {
   type ShiftInput,
 } from '../lib/shifts';
 
-const WEEKLY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEKLY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MIN_START_MINUTES = 30;
 const MIN_DURATION_MINUTES = 30;
 const WARN_DURATION_MINUTES = 8 * 60;
@@ -54,6 +54,12 @@ const toDateTimeInput = (value: Date) => {
 
 const addMinutes = (value: Date, minutes: number) =>
   new Date(value.getTime() + minutes * 60000);
+
+const toMinutePrecision = (value: Date) => {
+  const next = new Date(value);
+  next.setSeconds(0, 0);
+  return next;
+};
 
 const formatShiftDuration = (startAt: string, endAt: string) => {
   const start = new Date(startAt).getTime();
@@ -142,7 +148,7 @@ const getShiftValidation = (shift: {
   const errors: Record<string, string> = {};
   const warnings: Record<string, string> = {};
   const now = new Date();
-  const minStart = addMinutes(now, MIN_START_MINUTES);
+  const minStart = toMinutePrecision(addMinutes(now, MIN_START_MINUTES));
 
   const start = shift.startAt ? new Date(shift.startAt) : null;
   const end = shift.endAt ? new Date(shift.endAt) : null;
@@ -214,7 +220,9 @@ export function ScheduleRoute() {
     () => getShiftValidation(newShift),
     [newShift],
   );
-  const minStartAt = toDateTimeInput(addMinutes(new Date(), MIN_START_MINUTES));
+  const minStartAt = toDateTimeInput(
+    toMinutePrecision(addMinutes(new Date(), MIN_START_MINUTES)),
+  );
   const minEndAt = newShift.startAt
     ? toDateTimeInput(
         addMinutes(new Date(newShift.startAt), MIN_DURATION_MINUTES),
@@ -404,10 +412,13 @@ export function ScheduleRoute() {
 
   const handlePublishWeek = async () => {
     if (!draftShifts.length) return;
-    await Promise.all(
-      draftShifts.map((shift) => publishMutation.mutateAsync(shift.id)),
-    );
-    void invalidateShifts();
+    try {
+      await Promise.allSettled(
+        draftShifts.map((shift) => publishMutation.mutateAsync(shift.id)),
+      );
+    } finally {
+      void invalidateShifts();
+    }
   };
 
   const handleAssign = (shiftId: string) => {
