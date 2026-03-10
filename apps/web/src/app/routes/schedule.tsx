@@ -499,6 +499,12 @@ export function ScheduleRoute() {
 
   const shifts = shiftsQuery.data ?? [];
   const staff = staffQuery.data ?? [];
+  const staffErrorMessage =
+    staffQuery.isError && staffQuery.error instanceof Error
+      ? staffQuery.error.message
+      : staffQuery.isError
+        ? 'Unable to load staff.'
+        : '';
   const staffAvailabilityQueries = useQueries({
     queries: shifts.map((shift) => ({
       queryKey: ['shift-staff', shift.id],
@@ -1080,6 +1086,11 @@ export function ScheduleRoute() {
                   {availabilityError && !availabilityLoading ? (
                     <p className="text-xs text-rose-200/90">
                       Availability check failed; showing all staff.
+                    </p>
+                  ) : null}
+                  {staffErrorMessage ? (
+                    <p className="text-xs text-rose-200/90">
+                      {staffErrorMessage}
                     </p>
                   ) : null}
                   {availabilityData?.length ? (

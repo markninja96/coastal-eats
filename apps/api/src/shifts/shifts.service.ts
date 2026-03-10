@@ -742,7 +742,7 @@ export class ShiftsService {
         return true;
       }
       const overlaps =
-        exceptionStartMs <= shiftEndMs && exceptionEndMs >= shiftStartMs;
+        exceptionStartMs < shiftEndMs && exceptionEndMs > shiftStartMs;
       const fullyCovers =
         exceptionStartMs <= shiftStartMs && exceptionEndMs >= shiftEndMs;
       if (exception.type === 'unavailable') return overlaps;
@@ -847,29 +847,24 @@ export class ShiftsService {
       staffList.map((staff) => staff.id),
     );
 
-    const results = [] as Array<{
-      id: string;
-      name: string;
-      availability: 'available' | 'unavailable';
-      reason?: string;
-    }>;
-
-    for (const staff of staffList) {
-      const availability = availabilityByStaff.get(staff.id) ?? {
-        available: false,
-        reason: 'No availability window for this time',
-      };
-      const conflict = availability.available
-        ? await this.checkAssignmentConflicts(this.database, staff.id, shift)
-        : null;
-      const isAvailable = availability.available && !conflict;
-      results.push({
-        id: staff.id,
-        name: staff.name,
-        availability: isAvailable ? 'available' : 'unavailable',
-        reason: conflict ? conflict.reason : availability.reason,
-      });
-    }
+    const results = await Promise.all(
+      staffList.map(async (staff) => {
+        const availability = availabilityByStaff.get(staff.id) ?? {
+          available: false,
+          reason: 'No availability window for this time',
+        };
+        const conflict = availability.available
+          ? await this.checkAssignmentConflicts(this.database, staff.id, shift)
+          : null;
+        const isAvailable = availability.available && !conflict;
+        return {
+          id: staff.id,
+          name: staff.name,
+          availability: isAvailable ? 'available' : 'unavailable',
+          reason: conflict ? conflict.reason : availability.reason,
+        };
+      }),
+    );
 
     return results;
   }
