@@ -525,7 +525,10 @@ export class ShiftsService {
       .limit(1);
     const timezone = location?.timezone || 'UTC';
 
-    const { shiftDays } = this.getShiftDateInfo(shift, timezone);
+    const { shiftDays, shiftDateBounds } = this.getShiftDateInfo(
+      shift,
+      timezone,
+    );
 
     const exceptions = await dbClient
       .select()
@@ -533,8 +536,8 @@ export class ShiftsService {
       .where(
         and(
           eq(availabilityExceptions.staffId, staffId),
-          lte(availabilityExceptions.date, shift.endAt),
-          gte(availabilityExceptions.date, shift.startAt),
+          lte(availabilityExceptions.date, shiftDateBounds.end),
+          gte(availabilityExceptions.date, shiftDateBounds.start),
         ),
       );
 
@@ -566,7 +569,10 @@ export class ShiftsService {
       .limit(1);
     const timezone = location?.timezone || 'UTC';
 
-    const { shiftDays } = this.getShiftDateInfo(shift, timezone);
+    const { shiftDays, shiftDateBounds } = this.getShiftDateInfo(
+      shift,
+      timezone,
+    );
 
     const exceptions = await dbClient
       .select()
@@ -574,8 +580,8 @@ export class ShiftsService {
       .where(
         and(
           inArray(availabilityExceptions.staffId, staffIds),
-          lte(availabilityExceptions.date, shift.endAt),
-          gte(availabilityExceptions.date, shift.startAt),
+          lte(availabilityExceptions.date, shiftDateBounds.end),
+          gte(availabilityExceptions.date, shiftDateBounds.start),
         ),
       );
 
@@ -678,12 +684,33 @@ export class ShiftsService {
   ) {
     const startDate = this.toDateKey(shift.startAt, timeZone);
     const endDate = this.toDateKey(shift.endAt, timeZone);
-    const dateKeys = new Set([startDate, endDate]);
+    const prevStartDate = this.toDateKey(
+      new Date(shift.startAt.getTime() - 24 * 60 * 60 * 1000),
+      timeZone,
+    );
+    const dateKeys = new Set([startDate, endDate, prevStartDate]);
     const shiftDays = Array.from(dateKeys).map((dateKey) => {
       const [month, day, year] = dateKey.split('/').map(Number);
       return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
     });
-    return { shiftDays };
+    const bounds = Array.from(dateKeys).map((dateKey) => {
+      const [month, day, year] = dateKey.split('/').map(Number);
+      const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+      return { start, end };
+    });
+    const shiftDateBounds = bounds.reduce(
+      (acc, next) => {
+        if (next.start < acc.start) acc.start = next.start;
+        if (next.end > acc.end) acc.end = next.end;
+        return acc;
+      },
+      {
+        start: bounds[0]?.start ?? shift.startAt,
+        end: bounds[0]?.end ?? shift.endAt,
+      },
+    );
+    return { shiftDays, dateKeys, shiftDateBounds };
   }
 
   private evaluateStaffAvailability(
@@ -696,6 +723,10 @@ export class ShiftsService {
       const shiftDateKeys = new Set([
         this.toDateKey(shift.startAt, exception.timezone),
         this.toDateKey(shift.endAt, exception.timezone),
+        this.toDateKey(
+          new Date(shift.startAt.getTime() - 24 * 60 * 60 * 1000),
+          exception.timezone,
+        ),
       ]);
       if (!shiftDateKeys.has(exceptionDate)) return false;
       if (exception.locationId && exception.locationId !== shift.locationId) {
