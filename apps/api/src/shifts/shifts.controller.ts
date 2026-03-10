@@ -14,15 +14,17 @@ import { z } from 'zod';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import type { AuthUser } from '../auth/auth.types';
 import { ShiftsService } from './shifts.service';
+import {
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  MIN_START_MINUTES,
+  WARN_DURATION_MINUTES,
+} from './shifts.constants';
 
 const idSchema = z.string().uuid();
 const assignmentSchema = z.object({
   staffId: z.string().uuid(),
 });
-const MIN_START_MINUTES = 30;
-const MIN_DURATION_MINUTES = 30;
-const WARN_DURATION_MINUTES = 8 * 60;
-const MAX_DURATION_MINUTES = 12 * 60;
 
 type ShiftWarning = {
   code: 'duration';

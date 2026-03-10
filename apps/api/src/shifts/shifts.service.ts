@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, gte, lte, or, isNull, gt } from 'drizzle-orm';
+import { and, eq, gte, lte, or, isNull, gt, inArray } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import {
@@ -20,6 +20,11 @@ import {
   users,
 } from '../db/schema';
 import type { AuthUser } from '../auth/auth.types';
+import {
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  MIN_START_MINUTES,
+} from './shifts.constants';
 
 type DbClient = Omit<typeof db, '$client'>;
 
@@ -48,9 +53,6 @@ type Suggestion = {
 @Injectable()
 export class ShiftsService {
   constructor(@Inject(DB) private readonly database: typeof db) {}
-  private readonly minStartMinutes = 30;
-  private readonly minDurationMinutes = 30;
-  private readonly maxDurationMinutes = 12 * 60;
 
   private async assertLocationAccess(user: AuthUser, locationId: string) {
     if (user.role === 'admin') return;
@@ -84,7 +86,7 @@ export class ShiftsService {
   }
 
   private assertShiftTiming(startAt: Date, endAt: Date) {
-    const minStart = Date.now() + this.minStartMinutes * 60 * 1000;
+    const minStart = Date.now() + MIN_START_MINUTES * 60 * 1000;
     if (startAt.getTime() < minStart) {
       throw new BadRequestException(
         'Shift start must be at least 30 minutes from now',
@@ -95,10 +97,10 @@ export class ShiftsService {
     if (diffMinutes <= 0) {
       throw new BadRequestException('Shift end must be after start');
     }
-    if (diffMinutes < this.minDurationMinutes) {
+    if (diffMinutes < MIN_DURATION_MINUTES) {
       throw new BadRequestException('Shift must be at least 30 minutes');
     }
-    if (diffMinutes > this.maxDurationMinutes) {
+    if (diffMinutes > MAX_DURATION_MINUTES) {
       throw new BadRequestException('Shift cannot exceed 12 hours');
     }
   }
@@ -151,6 +153,7 @@ export class ShiftsService {
         }>;
       }
     >();
+    const assignmentIdsByShift = new Map<string, Set<string>>();
 
     rows.forEach((row) => {
       const shift = row.shift;
@@ -158,19 +161,24 @@ export class ShiftsService {
         ...shift,
         assignments: [],
       };
+      const assignmentIds = assignmentIdsByShift.get(shift.id) ?? new Set();
       if (
         row.assignment?.id &&
         row.staff?.id &&
         row.assignment.status === 'assigned'
       ) {
-        existing.assignments.push({
-          id: row.assignment.id,
-          staffId: row.assignment.staffId,
-          staffName: row.staff.name,
-          status: row.assignment.status,
-        });
+        if (!assignmentIds.has(row.assignment.id)) {
+          existing.assignments.push({
+            id: row.assignment.id,
+            staffId: row.assignment.staffId,
+            staffName: row.staff.name,
+            status: row.assignment.status,
+          });
+          assignmentIds.add(row.assignment.id);
+        }
       }
       byId.set(shift.id, existing);
+      assignmentIdsByShift.set(shift.id, assignmentIds);
     });
 
     return Array.from(byId.values());
@@ -217,7 +225,9 @@ export class ShiftsService {
 
     const nextStart = input.startAt ?? existing.startAt;
     const nextEnd = input.endAt ?? existing.endAt;
-    this.assertShiftTiming(nextStart, nextEnd);
+    if (input.startAt || input.endAt) {
+      this.assertShiftTiming(nextStart, nextEnd);
+    }
 
     const [updated] = await this.database
       .update(shifts)
@@ -600,6 +610,140 @@ export class ShiftsService {
     return { available: true };
   }
 
+  private async bulkCheckAvailability(
+    dbClient: DbClient,
+    shift: typeof shifts.$inferSelect,
+    staffIds: string[],
+  ) {
+    const results = new Map<string, { available: boolean; reason?: string }>();
+    if (!staffIds.length) return results;
+
+    const [location] = await dbClient
+      .select()
+      .from(locations)
+      .where(eq(locations.id, shift.locationId))
+      .limit(1);
+    const timezone = location?.timezone || 'UTC';
+
+    const shiftDate = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(shift.startAt);
+    const [month, day, year] = shiftDate.split('/').map(Number);
+    const shiftDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+
+    const exceptions = await dbClient
+      .select()
+      .from(availabilityExceptions)
+      .where(
+        and(
+          inArray(availabilityExceptions.staffId, staffIds),
+          lte(availabilityExceptions.date, shift.endAt),
+          gte(availabilityExceptions.date, shift.startAt),
+        ),
+      );
+
+    const windows = await dbClient
+      .select()
+      .from(availabilityWindows)
+      .where(
+        and(
+          inArray(availabilityWindows.staffId, staffIds),
+          eq(availabilityWindows.dayOfWeek, shiftDay),
+        ),
+      );
+
+    const toDateKey = (date: Date, tz: string) =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(date);
+
+    const toTimeKey = (date: Date, tz: string) =>
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(date) + ':00';
+
+    const exceptionsByStaff = new Map<string, typeof exceptions>();
+    exceptions.forEach((exception) => {
+      const list = exceptionsByStaff.get(exception.staffId) ?? [];
+      list.push(exception);
+      exceptionsByStaff.set(exception.staffId, list);
+    });
+
+    const windowsByStaff = new Map<string, typeof windows>();
+    windows.forEach((window) => {
+      const list = windowsByStaff.get(window.staffId) ?? [];
+      list.push(window);
+      windowsByStaff.set(window.staffId, list);
+    });
+
+    staffIds.forEach((staffId) => {
+      const staffExceptions = exceptionsByStaff.get(staffId) ?? [];
+      const exceptionHit = staffExceptions.find((exception) => {
+        const exceptionDate = toDateKey(exception.date, exception.timezone);
+        if (exceptionDate !== shiftDate) return false;
+        if (exception.locationId && exception.locationId !== shift.locationId) {
+          return false;
+        }
+        if (!exception.startTime || !exception.endTime) return true;
+        const shiftStartKey = toTimeKey(shift.startAt, exception.timezone);
+        const shiftEndKey = toTimeKey(shift.endAt, exception.timezone);
+        const overlaps =
+          exception.startTime <= shiftEndKey &&
+          exception.endTime >= shiftStartKey;
+        const fullyCovers =
+          exception.startTime <= shiftStartKey &&
+          exception.endTime >= shiftEndKey;
+        if (exception.type === 'unavailable') return overlaps;
+        return fullyCovers;
+      });
+
+      if (exceptionHit?.type === 'unavailable') {
+        results.set(staffId, {
+          available: false,
+          reason: 'Staff marked unavailable',
+        });
+        return;
+      }
+      if (exceptionHit?.type === 'available') {
+        results.set(staffId, { available: true });
+        return;
+      }
+
+      const staffWindows = windowsByStaff.get(staffId) ?? [];
+      const matchingWindow = staffWindows.find((window) => {
+        if (window.locationId && window.locationId !== shift.locationId) {
+          return false;
+        }
+        const shiftStartKey = toTimeKey(shift.startAt, window.timezone);
+        const shiftEndKey = toTimeKey(shift.endAt, window.timezone);
+        return (
+          window.startTime <= shiftStartKey && window.endTime >= shiftEndKey
+        );
+      });
+
+      if (!matchingWindow) {
+        results.set(staffId, {
+          available: false,
+          reason: 'No availability window for this time',
+        });
+        return;
+      }
+
+      results.set(staffId, { available: true });
+    });
+
+    return results;
+  }
+
   async listStaffAvailability(user: AuthUser, shiftId: string) {
     const shift = await this.getShiftOrThrow(shiftId);
     await this.assertLocationAccess(user, shift.locationId);
@@ -622,6 +766,12 @@ export class ShiftsService {
         and(...baseConditions, eq(staffSkills.skillId, shift.requiredSkillId)),
       );
 
+    const availabilityByStaff = await this.bulkCheckAvailability(
+      this.database,
+      shift,
+      staffList.map((staff) => staff.id),
+    );
+
     const results = [] as Array<{
       id: string;
       name: string;
@@ -630,11 +780,10 @@ export class ShiftsService {
     }>;
 
     for (const staff of staffList) {
-      const availability = await this.checkAvailability(
-        this.database,
-        staff.id,
-        shift,
-      );
+      const availability = availabilityByStaff.get(staff.id) ?? {
+        available: false,
+        reason: 'No availability window for this time',
+      };
       results.push({
         id: staff.id,
         name: staff.name,

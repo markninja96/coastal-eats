@@ -101,7 +101,8 @@ export async function createShift(input: ShiftInput) {
 }
 
 export async function updateShift(shiftId: string, input: Partial<ShiftInput>) {
-  const response = await apiFetch<Shift>(`/api/shifts/${shiftId}`, {
+  const encodedShiftId = encodeURIComponent(shiftId);
+  const response = await apiFetch<Shift>(`/api/shifts/${encodedShiftId}`, {
     method: 'PATCH',
     body: input,
   });
@@ -109,22 +110,31 @@ export async function updateShift(shiftId: string, input: Partial<ShiftInput>) {
 }
 
 export async function publishShift(shiftId: string) {
-  const response = await apiFetch<Shift>(`/api/shifts/${shiftId}/publish`, {
-    method: 'POST',
-  });
+  const encodedShiftId = encodeURIComponent(shiftId);
+  const response = await apiFetch<Shift>(
+    `/api/shifts/${encodedShiftId}/publish`,
+    {
+      method: 'POST',
+    },
+  );
   return ensureResponse(response, 'Empty shift response');
 }
 
 export async function unpublishShift(shiftId: string) {
-  const response = await apiFetch<Shift>(`/api/shifts/${shiftId}/unpublish`, {
-    method: 'POST',
-  });
+  const encodedShiftId = encodeURIComponent(shiftId);
+  const response = await apiFetch<Shift>(
+    `/api/shifts/${encodedShiftId}/unpublish`,
+    {
+      method: 'POST',
+    },
+  );
   return ensureResponse(response, 'Empty shift response');
 }
 
 export async function assignShift(shiftId: string, staffId: string) {
+  const encodedShiftId = encodeURIComponent(shiftId);
   const response = await apiFetch<Assignment>(
-    `/api/shifts/${shiftId}/assignments`,
+    `/api/shifts/${encodedShiftId}/assignments`,
     {
       method: 'POST',
       body: { staffId },
@@ -134,7 +144,10 @@ export async function assignShift(shiftId: string, staffId: string) {
 }
 
 export async function listShiftStaff(shiftId: string) {
-  const response = await apiFetch<ShiftStaff[]>(`/api/shifts/${shiftId}/staff`);
+  const encodedShiftId = encodeURIComponent(shiftId);
+  const response = await apiFetch<ShiftStaff[]>(
+    `/api/shifts/${encodedShiftId}/staff`,
+  );
   return response ?? [];
 }
 
@@ -142,6 +155,6 @@ const ensureResponse = <T>(
   response: T | null | undefined,
   message: string,
 ): T => {
-  if (!response) throw new Error(message);
+  if (response == null) throw new Error(message);
   return response;
 };

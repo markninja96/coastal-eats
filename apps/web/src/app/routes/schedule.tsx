@@ -221,15 +221,19 @@ export function ScheduleRoute() {
       )
     : minStartAt;
 
-  const weekStartDate = useMemo(
-    () => new Date(`${weekStart}T00:00:00`),
-    [weekStart],
-  );
+  const weekStartDate = useMemo(() => {
+    if (!weekStart) return null;
+    const date = new Date(`${weekStart}T00:00:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }, [weekStart]);
   const weekEndDate = useMemo(() => {
+    if (!weekStartDate) return null;
     const end = new Date(weekStartDate);
     end.setDate(end.getDate() + 7);
     return end;
   }, [weekStartDate]);
+  const weekStartIso = weekStartDate?.toISOString() ?? '';
+  const weekEndIso = weekEndDate?.toISOString() ?? '';
 
   const locationsQuery = useQuery({
     queryKey: ['locations'],
@@ -254,19 +258,16 @@ export function ScheduleRoute() {
   });
 
   const shiftsQuery = useQuery({
-    queryKey: [
-      'shifts',
-      activeLocationId,
-      weekStartDate.toISOString(),
-      weekEndDate.toISOString(),
-    ],
+    queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
     queryFn: () =>
       listShifts({
         locationId: activeLocationId,
-        start: weekStartDate.toISOString(),
-        end: weekEndDate.toISOString(),
+        start: weekStartIso,
+        end: weekEndIso,
       }),
-    enabled: Boolean(canFetch && activeLocationId),
+    enabled: Boolean(
+      canFetch && activeLocationId && weekStartDate && weekEndDate,
+    ),
   });
 
   const createMutation = useMutation({
@@ -288,24 +289,14 @@ export function ScheduleRoute() {
       });
       setShowValidation(false);
       void queryClient.invalidateQueries({
-        queryKey: [
-          'shifts',
-          activeLocationId,
-          weekStartDate.toISOString(),
-          weekEndDate.toISOString(),
-        ],
+        queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
       });
     },
   });
 
   const invalidateShifts = () =>
     queryClient.invalidateQueries({
-      queryKey: [
-        'shifts',
-        activeLocationId,
-        weekStartDate.toISOString(),
-        weekEndDate.toISOString(),
-      ],
+      queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
     });
 
   const publishMutation = useMutation({
@@ -331,7 +322,16 @@ export function ScheduleRoute() {
     },
     onError: (error) => {
       const parsed = parseAssignmentError(error);
-      if (parsed) setConflict(parsed);
+      if (parsed) {
+        setConflict(parsed);
+        return;
+      }
+      console.error('Failed to assign shift', error);
+      const fallbackMessage =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Unable to assign - network or unexpected response';
+      setConflict({ message: fallbackMessage });
     },
   });
 
@@ -344,7 +344,9 @@ export function ScheduleRoute() {
       enabled: Boolean(canFetch && shift.id),
     })),
   });
-  const weekLabel = formatWeekLabel(weekStartDate);
+  const weekLabel = weekStartDate
+    ? formatWeekLabel(weekStartDate)
+    : 'Invalid week';
   const locationMap = useMemo(
     () => new Map(locations.map((location) => [location.id, location])),
     [locations],
@@ -375,7 +377,8 @@ export function ScheduleRoute() {
   const draftShifts = shifts.filter((shift) => shift.status === 'draft');
   const publishWeekDisabled = !draftShifts.length || publishMutation.isPending;
   const canLoad = Boolean(canFetch && activeLocationId);
-  const showEmpty = canLoad && !shifts.length && !shiftsQuery.isLoading;
+  const showEmpty =
+    canLoad && !shifts.length && !shiftsQuery.isLoading && !shiftsQuery.isError;
   const createDisabled =
     createMutation.isPending ||
     !activeLocationId ||
@@ -413,6 +416,15 @@ export function ScheduleRoute() {
     assignMutation.mutate({ shiftId, staffId });
   };
 
+  const locationSelectId = 'schedule-location';
+  const weekStartId = 'schedule-week-start';
+  const createStartId = 'create-shift-start';
+  const createEndId = 'create-shift-end';
+  const createHeadcountId = 'create-shift-headcount';
+  const createSkillId = 'create-shift-skill';
+  const createTitleId = 'create-shift-title';
+  const createNotesId = 'create-shift-notes';
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -438,10 +450,14 @@ export function ScheduleRoute() {
         </CardHeader>
         <CardBody className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+            <label
+              htmlFor={locationSelectId}
+              className="text-xs uppercase tracking-[0.2em] text-ink/50"
+            >
               Location
             </label>
             <select
+              id={locationSelectId}
               className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
               value={activeLocationId}
               onChange={(event) => setLocationId(event.target.value)}
@@ -455,10 +471,14 @@ export function ScheduleRoute() {
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+            <label
+              htmlFor={weekStartId}
+              className="text-xs uppercase tracking-[0.2em] text-ink/50"
+            >
               Week starting
             </label>
             <Input
+              id={weekStartId}
               type="date"
               value={weekStart}
               onChange={(event) => setWeekStart(event.target.value)}
@@ -474,10 +494,14 @@ export function ScheduleRoute() {
         <CardBody>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createStartId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Start time
               </label>
               <Input
+                id={createStartId}
                 type="datetime-local"
                 value={newShift.startAt}
                 min={minStartAt}
@@ -496,10 +520,14 @@ export function ScheduleRoute() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createEndId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 End time
               </label>
               <Input
+                id={createEndId}
                 type="datetime-local"
                 value={newShift.endAt}
                 min={minEndAt}
@@ -523,10 +551,14 @@ export function ScheduleRoute() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createHeadcountId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Headcount
               </label>
               <Input
+                id={createHeadcountId}
                 type="number"
                 min={1}
                 step={1}
@@ -547,10 +579,14 @@ export function ScheduleRoute() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createSkillId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Required skill
               </label>
               <select
+                id={createSkillId}
                 className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
                 value={newShift.requiredSkillId}
                 onChange={(event) =>
@@ -575,10 +611,14 @@ export function ScheduleRoute() {
               ) : null}
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createTitleId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Shift title
               </label>
               <Input
+                id={createTitleId}
                 value={newShift.title}
                 onChange={(event) =>
                   setNewShift((prev) => ({
@@ -591,10 +631,14 @@ export function ScheduleRoute() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={createNotesId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Notes
               </label>
               <Textarea
+                id={createNotesId}
                 value={newShift.notes}
                 onChange={(event) =>
                   setNewShift((prev) => ({
@@ -763,10 +807,14 @@ export function ScheduleRoute() {
               actions={
                 <div className="w-full space-y-3">
                   <div className="space-y-2">
-                    <label className="text-[10px] uppercase tracking-[0.2em] text-ink/50">
+                    <label
+                      htmlFor={`assign-staff-${shift.id}`}
+                      className="text-[10px] uppercase tracking-[0.2em] text-ink/50"
+                    >
                       Assign staff
                     </label>
                     <select
+                      id={`assign-staff-${shift.id}`}
                       className="w-full rounded-2xl border border-white/15 bg-mist/80 px-4 py-2 text-sm text-ink"
                       value={assignInputs[shift.id] ?? ''}
                       disabled={availabilityLoading || !selectableStaff.length}

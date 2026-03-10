@@ -27,7 +27,7 @@ export type AuthContextValue = {
   registerPending: boolean;
   loginError: Error | null;
   registerError: Error | null;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 type AuthStore = {
@@ -101,9 +101,13 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
       }
       set({ session: { user: data.user }, registerPending: false });
     } catch (error) {
+      const nextError =
+        error instanceof ApiError || error instanceof Error
+          ? error
+          : new Error(String(error));
       set({
         registerPending: false,
-        registerError: error as Error,
+        registerError: nextError,
       });
       throw error;
     }
@@ -177,12 +181,15 @@ export function useAuth(): AuthContextValue {
     registerPending,
     loginError,
     registerError,
-    logout: () => {
-      void apiFetch('/api/auth/logout', { method: 'POST' }).catch((error) => {
+    logout: async () => {
+      try {
+        await apiFetch('/api/auth/logout', { method: 'POST' });
+        logoutStore();
+        queryClient.removeQueries({ queryKey: ['auth'] });
+      } catch (error) {
         console.error('Failed to logout', error);
-      });
-      logoutStore();
-      queryClient.removeQueries({ queryKey: ['auth'] });
+        throw error;
+      }
     },
   };
 }

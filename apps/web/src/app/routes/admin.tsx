@@ -118,6 +118,13 @@ export function AdminRoute() {
 
   const locations = locationsQuery.data ?? [];
   const skills = skillsQuery.data ?? [];
+  const locationNameId = 'admin-location-name';
+  const locationLibraryId = 'admin-location-library';
+  const locationCityId = 'admin-location-city';
+  const locationRegionId = 'admin-location-region';
+  const locationCountryId = 'admin-location-country';
+  const locationTimezoneId = 'admin-location-timezone';
+  const skillNameId = 'admin-skill-name';
 
   return (
     <div className="space-y-8">
@@ -152,10 +159,14 @@ export function AdminRoute() {
           </div>
           <div className="space-y-3">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={locationNameId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Location name
               </label>
               <Input
+                id={locationNameId}
                 value={newLocation.name}
                 onChange={(event) =>
                   setNewLocation((prev) => ({
@@ -167,11 +178,15 @@ export function AdminRoute() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={locationLibraryId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Location library
               </label>
               <div className="relative">
                 <Input
+                  id={locationLibraryId}
                   value={locationQuery}
                   onChange={(event) => {
                     const nextValue = event.target.value;
@@ -195,6 +210,14 @@ export function AdminRoute() {
                         region: formatRegion(nextMatch),
                         country: formatCountry(nextMatch),
                         timezone: nextMatch.timezone,
+                      }));
+                    } else {
+                      setNewLocation((prev) => ({
+                        ...prev,
+                        city: '',
+                        region: '',
+                        country: '',
+                        timezone: '',
                       }));
                     }
                   }}
@@ -256,7 +279,11 @@ export function AdminRoute() {
                 City, region, country
               </label>
               <div className="grid gap-3 md:grid-cols-2">
+                <label htmlFor={locationCityId} className="sr-only">
+                  City
+                </label>
                 <Input
+                  id={locationCityId}
                   value={newLocation.city}
                   onChange={(event) =>
                     setNewLocation((prev) => ({
@@ -268,7 +295,11 @@ export function AdminRoute() {
                   disabled
                   className="cursor-not-allowed"
                 />
+                <label htmlFor={locationRegionId} className="sr-only">
+                  Region
+                </label>
                 <Input
+                  id={locationRegionId}
                   value={newLocation.region}
                   onChange={(event) =>
                     setNewLocation((prev) => ({
@@ -280,7 +311,11 @@ export function AdminRoute() {
                   disabled
                   className="cursor-not-allowed"
                 />
+                <label htmlFor={locationCountryId} className="sr-only">
+                  Country
+                </label>
                 <Input
+                  id={locationCountryId}
                   value={newLocation.country}
                   onChange={(event) =>
                     setNewLocation((prev) => ({
@@ -298,10 +333,14 @@ export function AdminRoute() {
               Filled from the location library selection.
             </p>
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={locationTimezoneId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Timezone
               </label>
               <TimezoneSelect
+                id={locationTimezoneId}
                 value={newLocation.timezone}
                 onChange={(value) => {
                   const nextValue =
@@ -316,7 +355,7 @@ export function AdminRoute() {
             <Button
               onClick={() =>
                 createLocationMutation.mutate({
-                  name: newLocation.name,
+                  name: newLocation.name.trim(),
                   city: newLocation.city || undefined,
                   region: newLocation.region || undefined,
                   country: newLocation.country || undefined,
@@ -325,7 +364,7 @@ export function AdminRoute() {
               }
               disabled={
                 createLocationMutation.isPending ||
-                !newLocation.name ||
+                !(newLocation.name || '').trim() ||
                 !newLocation.timezone
               }
             >
@@ -352,18 +391,26 @@ export function AdminRoute() {
           </div>
           <div className="space-y-3">
             <div className="space-y-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              <label
+                htmlFor={skillNameId}
+                className="text-xs uppercase tracking-[0.2em] text-ink/50"
+              >
                 Skill name
               </label>
               <Input
+                id={skillNameId}
                 value={newSkill}
                 onChange={(event) => setNewSkill(event.target.value)}
                 placeholder="Skill name"
               />
             </div>
             <Button
-              onClick={() => createSkillMutation.mutate({ name: newSkill })}
-              disabled={createSkillMutation.isPending || !newSkill}
+              onClick={() =>
+                createSkillMutation.mutate({ name: newSkill.trim() })
+              }
+              disabled={
+                createSkillMutation.isPending || !(newSkill || '').trim()
+              }
             >
               Add skill
             </Button>
