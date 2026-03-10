@@ -15,6 +15,10 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import type { AuthUser } from '../auth/auth.types';
 import { ShiftsService } from './shifts.service';
 import {
+  getShiftMaxDurationMessage,
+  getShiftMinDurationMessage,
+  getShiftMinStartMessage,
+  getShiftWarnDurationMessage,
   MAX_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
   MIN_START_MINUTES,
@@ -34,7 +38,7 @@ type ShiftWarning = {
 const getShiftWarnings = (startAt: Date, endAt: Date): ShiftWarning[] => {
   const diffMinutes = (endAt.getTime() - startAt.getTime()) / 60000;
   if (diffMinutes > WARN_DURATION_MINUTES) {
-    return [{ code: 'duration', message: 'Shift exceeds 8 hours.' }];
+    return [{ code: 'duration', message: getShiftWarnDurationMessage() }];
   }
   return [];
 };
@@ -55,7 +59,7 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['startAt'],
-      message: 'Start time must be at least 30 minutes from now.',
+      message: getShiftMinStartMessage(),
     });
   }
 
@@ -72,14 +76,14 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['endAt'],
-      message: 'Shift must be at least 30 minutes.',
+      message: getShiftMinDurationMessage(),
     });
   }
   if (diffMinutes > MAX_DURATION_MINUTES) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['endAt'],
-      message: 'Shift cannot exceed 12 hours.',
+      message: getShiftMaxDurationMessage(),
     });
   }
 });
@@ -93,7 +97,7 @@ const shiftUpdateSchema = shiftInputBaseSchema
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['startAt'],
-        message: 'Start time must be at least 30 minutes from now.',
+        message: getShiftMinStartMessage(),
       });
     }
 
@@ -110,14 +114,14 @@ const shiftUpdateSchema = shiftInputBaseSchema
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['endAt'],
-        message: 'Shift must be at least 30 minutes.',
+        message: getShiftMinDurationMessage(),
       });
     }
     if (diffMinutes > MAX_DURATION_MINUTES) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['endAt'],
-        message: 'Shift cannot exceed 12 hours.',
+        message: getShiftMaxDurationMessage(),
       });
     }
   });

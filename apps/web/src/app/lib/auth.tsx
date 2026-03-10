@@ -197,8 +197,12 @@ export function useAuth(): AuthContextValue {
     loginError,
     registerError,
     logout: async () => {
+      let errorMessage: string | null = null;
       try {
         await apiFetch('/api/auth/logout', { method: 'POST' });
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      } finally {
         clearSession();
         [
           'auth',
@@ -210,9 +214,9 @@ export function useAuth(): AuthContextValue {
         ].forEach((key) => {
           queryClient.removeQueries({ queryKey: [key] });
         });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Logout failed: ${message}`);
+      }
+      if (errorMessage) {
+        throw new Error(`Logout failed: ${errorMessage}`);
       }
     },
   };

@@ -24,6 +24,10 @@ import { listStaff } from '../lib/staff';
 import { formatTimezoneDisplay } from '../lib/timezones';
 import {
   MAX_DURATION_MINUTES,
+  getShiftMaxDurationMessage,
+  getShiftMinDurationMessage,
+  getShiftMinStartMessage,
+  getShiftWarnDurationMessage,
   MIN_DURATION_MINUTES,
   MIN_START_MINUTES,
   WARN_DURATION_MINUTES,
@@ -102,6 +106,20 @@ const toTimeZoneDate = (value: string, timeZone: string) => {
   if (Number.isNaN(base.getTime())) return null;
   const offsetMs = getTimeZoneOffsetMs(base, timeZone);
   return new Date(base.getTime() - offsetMs);
+};
+
+const toTimeZoneDateTime = (value: string, timeZone: string) => {
+  const base = new Date(`${value}Z`);
+  if (Number.isNaN(base.getTime())) return null;
+  const offsetMs = getTimeZoneOffsetMs(base, timeZone);
+  return new Date(base.getTime() - offsetMs);
+};
+
+const addDaysToDateInput = (value: string, days: number) => {
+  const base = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) return null;
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
 };
 
 const formatShiftDuration = (startAt: string, endAt: string) => {
@@ -185,26 +203,33 @@ const parseAssignmentError = (error: unknown): AssignmentError | null => {
   }
 };
 
-const getShiftValidation = (shift: {
-  startAt: string;
-  endAt: string;
-  headcount: number;
-  requiredSkillId: string;
-}) => {
+const getShiftValidation = (
+  shift: {
+    startAt: string;
+    endAt: string;
+    headcount: number;
+    requiredSkillId: string;
+  },
+  activeTimezone: string,
+) => {
   const errors: Record<string, string> = {};
   const warnings: Record<string, string> = {};
   const now = new Date();
   const minStart = toMinutePrecision(addMinutes(now, MIN_START_MINUTES));
 
-  const start = shift.startAt ? new Date(shift.startAt) : null;
-  const end = shift.endAt ? new Date(shift.endAt) : null;
+  const start = shift.startAt
+    ? toTimeZoneDateTime(shift.startAt, activeTimezone)
+    : null;
+  const end = shift.endAt
+    ? toTimeZoneDateTime(shift.endAt, activeTimezone)
+    : null;
 
   if (!shift.startAt) {
     errors.startAt = 'Start time is required.';
   } else if (!start || Number.isNaN(start.getTime())) {
     errors.startAt = 'Start time is invalid.';
   } else if (start < minStart) {
-    errors.startAt = 'Start time must be at least 30 minutes from now.';
+    errors.startAt = getShiftMinStartMessage();
   }
 
   if (!shift.endAt) {
@@ -223,11 +248,11 @@ const getShiftValidation = (shift: {
     if (diffMinutes <= 0) {
       errors.endAt = 'End time must be after start time.';
     } else if (diffMinutes < MIN_DURATION_MINUTES) {
-      errors.endAt = 'Shift must be at least 30 minutes.';
+      errors.endAt = getShiftMinDurationMessage();
     } else if (diffMinutes > MAX_DURATION_MINUTES) {
-      errors.endAt = 'Shift cannot exceed 12 hours.';
+      errors.endAt = getShiftMaxDurationMessage();
     } else if (diffMinutes > WARN_DURATION_MINUTES) {
-      warnings.duration = 'Shift exceeds 8 hours.';
+      warnings.duration = getShiftWarnDurationMessage();
     }
   }
 
@@ -266,10 +291,6 @@ export function ScheduleRoute() {
   const [assignInputs, setAssignInputs] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState<AssignmentError | null>(null);
   const [isPublishingBatch, setIsPublishingBatch] = useState(false);
-  const shiftValidation = useMemo(
-    () => getShiftValidation(newShift),
-    [newShift],
-  );
   const minStartAt = toDateTimeInput(
     toMinutePrecision(addMinutes(new Date(), MIN_START_MINUTES)),
   );
@@ -303,16 +324,21 @@ export function ScheduleRoute() {
     Intl.DateTimeFormat().resolvedOptions().timeZone ||
     'UTC';
 
+  const shiftValidation = useMemo(
+    () => getShiftValidation(newShift, activeTimezone),
+    [newShift, activeTimezone],
+  );
+
   const weekStartDate = useMemo(() => {
     if (!weekStart) return null;
     return toTimeZoneDate(weekStart, activeTimezone);
   }, [weekStart, activeTimezone]);
   const weekEndDate = useMemo(() => {
-    if (!weekStartDate) return null;
-    const end = new Date(weekStartDate);
-    end.setDate(end.getDate() + 7);
-    return end;
-  }, [weekStartDate]);
+    if (!weekStart) return null;
+    const nextWeekStart = addDaysToDateInput(weekStart, 7);
+    if (!nextWeekStart) return null;
+    return toTimeZoneDate(nextWeekStart, activeTimezone);
+  }, [weekStart, activeTimezone]);
   const weekStartIso = weekStartDate?.toISOString() ?? '';
   const weekEndIso = weekEndDate?.toISOString() ?? '';
 
@@ -502,14 +528,17 @@ export function ScheduleRoute() {
   const handleCreate = () => {
     setCreateError('');
     setShowValidation(true);
-    const validation = getShiftValidation(newShift);
+    const validation = getShiftValidation(newShift, activeTimezone);
     if (Object.keys(validation.errors).length) return;
     const location = activeLocationId;
     if (!location || !newShift.startAt || !newShift.endAt) return;
+    const startAt = toTimeZoneDateTime(newShift.startAt, activeTimezone);
+    const endAt = toTimeZoneDateTime(newShift.endAt, activeTimezone);
+    if (!startAt || !endAt) return;
     createMutation.mutate({
       locationId: location,
-      startAt: newShift.startAt,
-      endAt: newShift.endAt,
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
       headcount: Number(newShift.headcount) || 1,
       requiredSkillId: newShift.requiredSkillId,
       title: newShift.title.trim(),
@@ -891,7 +920,7 @@ export function ScheduleRoute() {
           );
           const warning =
             durationMinutes > WARN_DURATION_MINUTES
-              ? 'Shift exceeds 8 hours'
+              ? getShiftWarnDurationMessage()
               : undefined;
           const availabilityLoading =
             staffAvailabilityQueries[index]?.isLoading ?? false;
