@@ -375,7 +375,7 @@ export class ShiftsService {
               eq(shiftAssignments.status, 'assigned'),
             ),
           );
-        if (assignmentCount >= shift.headcount) {
+        if (Number(assignmentCount) >= shift.headcount) {
           const suggestions = await this.suggestStaff(tx, shift);
           throw new BadRequestException({
             message: 'Assignment violates constraints',
