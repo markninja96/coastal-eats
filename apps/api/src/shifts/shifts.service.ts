@@ -248,7 +248,7 @@ export class ShiftsService {
     }
 
     if (
-      input.requiredSkillId &&
+      input.requiredSkillId !== undefined &&
       input.requiredSkillId !== existing.requiredSkillId
     ) {
       await this.assertSkillExists(input.requiredSkillId);
@@ -266,7 +266,7 @@ export class ShiftsService {
             : existing.requiredSkillId,
         headcount: input.headcount ?? existing.headcount,
         title: input.title ?? existing.title,
-        notes: input.notes ?? existing.notes,
+        notes: input.notes === undefined ? existing.notes : input.notes,
         updatedBy: user.id,
         updatedAt: new Date(),
       })
@@ -656,6 +656,64 @@ export class ShiftsService {
     };
   }
 
+  private getDateFromLocalParts(
+    parts: {
+      year: number;
+      month: number;
+      day: number;
+      hour: number;
+      minute: number;
+      second: number;
+    },
+    timeZone: string,
+  ) {
+    const utcGuess = new Date(
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        parts.hour,
+        parts.minute,
+        parts.second,
+      ),
+    );
+    const actual = this.getLocalDateParts(utcGuess, timeZone);
+    const desiredUtc = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    const actualUtc = Date.UTC(
+      actual.year,
+      actual.month - 1,
+      actual.day,
+      actual.hour,
+      actual.minute,
+      actual.second,
+    );
+    const diff = desiredUtc - actualUtc;
+    return new Date(utcGuess.getTime() + diff);
+  }
+
+  private getPreviousLocalDateKey(date: Date, timeZone: string) {
+    const parts = this.getLocalDateParts(date, timeZone);
+    const prevDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+    const prevParts = {
+      year: prevDate.getUTCFullYear(),
+      month: prevDate.getUTCMonth() + 1,
+      day: prevDate.getUTCDate(),
+      hour: 0,
+      minute: 0,
+      second: 0,
+    };
+    const prevLocalDate = this.getDateFromLocalParts(prevParts, timeZone);
+    return this.toDateKey(prevLocalDate, timeZone);
+  }
+
   private getLocalTimestamp(date: Date, timeZone: string) {
     const parts = this.getLocalDateParts(date, timeZone);
     return Date.UTC(
@@ -683,10 +741,7 @@ export class ShiftsService {
   ) {
     const startDate = this.toDateKey(shift.startAt, timeZone);
     const endDate = this.toDateKey(shift.endAt, timeZone);
-    const prevStartDate = this.toDateKey(
-      new Date(shift.startAt.getTime() - 24 * 60 * 60 * 1000),
-      timeZone,
-    );
+    const prevStartDate = this.getPreviousLocalDateKey(shift.startAt, timeZone);
     const dateKeys = new Set([startDate, endDate, prevStartDate]);
     const shiftDays = Array.from(dateKeys).map((dateKey) => {
       const [year, month, day] = dateKey.split('-').map(Number);
@@ -722,10 +777,7 @@ export class ShiftsService {
       const shiftDateKeys = new Set([
         this.toDateKey(shift.startAt, exception.timezone),
         this.toDateKey(shift.endAt, exception.timezone),
-        this.toDateKey(
-          new Date(shift.startAt.getTime() - 24 * 60 * 60 * 1000),
-          exception.timezone,
-        ),
+        this.getPreviousLocalDateKey(shift.startAt, exception.timezone),
       ]);
       if (!shiftDateKeys.has(exceptionDate)) return false;
       if (exception.locationId && exception.locationId !== shift.locationId) {
