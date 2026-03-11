@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, gte, lte, or, isNull, gt, inArray } from 'drizzle-orm';
+import { and, eq, gte, lte, or, isNull, gt, inArray, not } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import {
@@ -1004,6 +1004,7 @@ export class ShiftsService {
       .where(
         and(
           inArray(shiftAssignments.staffId, staffIds),
+          not(eq(shiftAssignments.shiftId, shift.id)),
           eq(shiftAssignments.status, 'assigned'),
           lte(shifts.startAt, windowEnd),
           gte(shifts.endAt, windowStart),
