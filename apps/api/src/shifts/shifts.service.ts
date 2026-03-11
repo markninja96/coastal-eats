@@ -624,12 +624,11 @@ export class ShiftsService {
   }
 
   private toDateKey(date: Date, timeZone: string) {
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(date);
+    const parts = this.getLocalDateParts(date, timeZone);
+    const year = String(parts.year).padStart(4, '0');
+    const month = String(parts.month).padStart(2, '0');
+    const day = String(parts.day).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   private getLocalDateParts(date: Date, timeZone: string) {
@@ -690,11 +689,11 @@ export class ShiftsService {
     );
     const dateKeys = new Set([startDate, endDate, prevStartDate]);
     const shiftDays = Array.from(dateKeys).map((dateKey) => {
-      const [month, day, year] = dateKey.split('/').map(Number);
+      const [year, month, day] = dateKey.split('-').map(Number);
       return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
     });
     const bounds = Array.from(dateKeys).map((dateKey) => {
-      const [month, day, year] = dateKey.split('/').map(Number);
+      const [year, month, day] = dateKey.split('-').map(Number);
       const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
       const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
       return { start, end };
@@ -810,11 +809,26 @@ export class ShiftsService {
       const endDay = new Date(
         Date.UTC(endParts.year, endParts.month - 1, endParts.day),
       ).getUTCDay();
+      const prevStartDate = new Date(
+        Date.UTC(startParts.year, startParts.month - 1, startParts.day),
+      );
+      prevStartDate.setUTCDate(prevStartDate.getUTCDate() - 1);
+      const prevStartParts = {
+        year: prevStartDate.getUTCFullYear(),
+        month: prevStartDate.getUTCMonth() + 1,
+        day: prevStartDate.getUTCDate(),
+        hour: startParts.hour,
+        minute: startParts.minute,
+        second: startParts.second,
+      };
+      const dayBeforeStart = prevStartDate.getUTCDay();
       let windowDate = startParts;
       if (window.dayOfWeek === endDay) {
         windowDate = endParts;
       } else if (window.dayOfWeek === startDay) {
         windowDate = startParts;
+      } else if (window.dayOfWeek === dayBeforeStart) {
+        windowDate = prevStartParts;
       }
 
       const windowStartParts = this.parseTimeParts(window.startTime);
@@ -886,35 +900,30 @@ export class ShiftsService {
       shift,
     );
 
-    const results = await Promise.all(
-      staffList.map(async (staff) => {
-        const availability = availabilityByStaff.get(staff.id) ?? {
-          available: false,
-          reason: 'No availability window for this time',
-        };
-        let conflict = null as { reason: string } | null;
-        if (availability.available) {
-          const assignments = assignmentsByStaff.get(staff.id) ?? [];
-          for (const assignment of assignments) {
-            const violation = this.checkOverlapOrRestViolation(
-              assignment,
-              shift,
-            );
-            if (violation) {
-              conflict = { reason: violation.message };
-              break;
-            }
+    const results = staffList.map((staff) => {
+      const availability = availabilityByStaff.get(staff.id) ?? {
+        available: false,
+        reason: 'No availability window for this time',
+      };
+      let conflict = null as { reason: string } | null;
+      if (availability.available) {
+        const assignments = assignmentsByStaff.get(staff.id) ?? [];
+        for (const assignment of assignments) {
+          const violation = this.checkOverlapOrRestViolation(assignment, shift);
+          if (violation) {
+            conflict = { reason: violation.message };
+            break;
           }
         }
-        const isAvailable = availability.available && !conflict;
-        return {
-          id: staff.id,
-          name: staff.name,
-          availability: isAvailable ? 'available' : 'unavailable',
-          reason: conflict ? conflict.reason : availability.reason,
-        };
-      }),
-    );
+      }
+      const isAvailable = availability.available && !conflict;
+      return {
+        id: staff.id,
+        name: staff.name,
+        availability: isAvailable ? 'available' : 'unavailable',
+        reason: conflict ? conflict.reason : availability.reason,
+      };
+    });
 
     return results;
   }
