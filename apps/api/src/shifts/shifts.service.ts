@@ -5,7 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, gte, lte, or, isNull, gt, inArray, not } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  gte,
+  lte,
+  or,
+  isNull,
+  gt,
+  inArray,
+  not,
+  sql,
+} from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import {
@@ -355,6 +366,29 @@ export class ShiftsService {
           });
         }
 
+        const [{ count: assignmentCount }] = await tx
+          .select({ count: sql<number>`count(*)` })
+          .from(shiftAssignments)
+          .where(
+            and(
+              eq(shiftAssignments.shiftId, shift.id),
+              eq(shiftAssignments.status, 'assigned'),
+            ),
+          );
+        if (assignmentCount >= shift.headcount) {
+          const suggestions = await this.suggestStaff(tx, shift);
+          throw new BadRequestException({
+            message: 'Assignment violates constraints',
+            violations: [
+              {
+                code: 'headcount',
+                message: 'Shift is fully assigned',
+              },
+            ],
+            suggestions,
+          });
+        }
+
         const [assignment] = await tx
           .insert(shiftAssignments)
           .values({
@@ -594,7 +628,7 @@ export class ShiftsService {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false,
+      hourCycle: 'h23',
     }).formatToParts(date);
     const values: Record<string, number> = {};
     for (const part of parts) {
@@ -800,7 +834,7 @@ export class ShiftsService {
         second: startParts.second,
       };
       const dayBeforeStart = prevStartDate.getUTCDay();
-      let windowDate = startParts;
+      let windowDate: typeof startParts | null = null;
       if (window.dayOfWeek === endDay) {
         windowDate = endParts;
       } else if (window.dayOfWeek === startDay) {
@@ -808,6 +842,7 @@ export class ShiftsService {
       } else if (window.dayOfWeek === dayBeforeStart) {
         windowDate = prevStartParts;
       }
+      if (!windowDate) return false;
 
       const windowStartParts = this.parseTimeParts(window.startTime);
       const windowEndParts = this.parseTimeParts(window.endTime);
@@ -884,9 +919,13 @@ export class ShiftsService {
         reason: 'No availability window for this time',
       };
       let conflict = null as { reason: string } | null;
-      if (availability.available) {
-        const assignments = assignmentsByStaff.get(staff.id) ?? [];
+      const assignments = assignmentsByStaff.get(staff.id) ?? [];
+      if (assignments.some((assignment) => assignment.shiftId === shift.id)) {
+        conflict = { reason: 'Already assigned to this shift' };
+      }
+      if (availability.available && !conflict) {
         for (const assignment of assignments) {
+          if (assignment.shiftId === shift.id) continue;
           const violation = this.checkOverlapOrRestViolation(assignment, shift);
           if (violation) {
             conflict = { reason: violation.message };
@@ -913,7 +952,7 @@ export class ShiftsService {
   ) {
     const assignmentsByStaff = new Map<
       string,
-      Array<{ startAt: Date; endAt: Date }>
+      Array<{ shiftId: string; startAt: Date; endAt: Date }>
     >();
     if (!staffIds.length) return assignmentsByStaff;
 
@@ -922,6 +961,7 @@ export class ShiftsService {
     const assignments = await dbClient
       .select({
         staffId: shiftAssignments.staffId,
+        shiftId: shiftAssignments.shiftId,
         startAt: shifts.startAt,
         endAt: shifts.endAt,
       })
@@ -930,7 +970,6 @@ export class ShiftsService {
       .where(
         and(
           inArray(shiftAssignments.staffId, staffIds),
-          not(eq(shiftAssignments.shiftId, shift.id)),
           eq(shiftAssignments.status, 'assigned'),
           lte(shifts.startAt, windowEnd),
           gte(shifts.endAt, windowStart),
@@ -939,7 +978,11 @@ export class ShiftsService {
 
     assignments.forEach((assignment) => {
       const list = assignmentsByStaff.get(assignment.staffId) ?? [];
-      list.push({ startAt: assignment.startAt, endAt: assignment.endAt });
+      list.push({
+        shiftId: assignment.shiftId,
+        startAt: assignment.startAt,
+        endAt: assignment.endAt,
+      });
       assignmentsByStaff.set(assignment.staffId, list);
     });
 
