@@ -5,18 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  and,
-  eq,
-  gte,
-  lte,
-  or,
-  isNull,
-  gt,
-  inArray,
-  not,
-  sql,
-} from 'drizzle-orm';
+import { and, eq, gte, lte, or, isNull, gt, inArray, not } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import {
@@ -366,16 +355,17 @@ export class ShiftsService {
           });
         }
 
-        const [{ count: assignmentCount }] = await tx
-          .select({ count: sql<number>`count(*)` })
+        const existingAssignments = await tx
+          .select({ id: shiftAssignments.id })
           .from(shiftAssignments)
           .where(
             and(
               eq(shiftAssignments.shiftId, shift.id),
               eq(shiftAssignments.status, 'assigned'),
             ),
-          );
-        if (Number(assignmentCount) >= shift.headcount) {
+          )
+          .for('update');
+        if (existingAssignments.length >= shift.headcount) {
           const suggestions = await this.suggestStaff(tx, shift);
           throw new BadRequestException({
             message: 'Assignment violates constraints',
