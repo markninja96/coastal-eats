@@ -11,7 +11,6 @@ import { db } from '../db/db';
 import {
   availabilityExceptions,
   availabilityWindows,
-  locations,
   managerLocations,
   skills,
   shiftAssignments,
@@ -489,6 +488,7 @@ export class ShiftsService {
       .where(
         and(
           eq(shiftAssignments.staffId, staffId),
+          not(eq(shiftAssignments.shiftId, shift.id)),
           eq(shiftAssignments.status, 'assigned'),
           lte(shifts.startAt, windowEnd),
           gte(shifts.endAt, windowStart),
@@ -518,38 +518,15 @@ export class ShiftsService {
     staffId: string,
     shift: typeof shifts.$inferSelect,
   ) {
-    const [location] = await dbClient
-      .select()
-      .from(locations)
-      .where(eq(locations.id, shift.locationId))
-      .limit(1);
-    const timezone = location?.timezone || 'UTC';
-
-    const { shiftDays, shiftDateBounds } = this.getShiftDateInfo(
-      shift,
-      timezone,
-    );
-
     const exceptions = await dbClient
       .select()
       .from(availabilityExceptions)
-      .where(
-        and(
-          eq(availabilityExceptions.staffId, staffId),
-          lte(availabilityExceptions.date, shiftDateBounds.end),
-          gte(availabilityExceptions.date, shiftDateBounds.start),
-        ),
-      );
+      .where(eq(availabilityExceptions.staffId, staffId));
 
     const windows = await dbClient
       .select()
       .from(availabilityWindows)
-      .where(
-        and(
-          eq(availabilityWindows.staffId, staffId),
-          inArray(availabilityWindows.dayOfWeek, shiftDays),
-        ),
-      );
+      .where(eq(availabilityWindows.staffId, staffId));
 
     return this.evaluateStaffAvailability(shift, exceptions, windows);
   }
@@ -562,38 +539,15 @@ export class ShiftsService {
     const results = new Map<string, { available: boolean; reason?: string }>();
     if (!staffIds.length) return results;
 
-    const [location] = await dbClient
-      .select()
-      .from(locations)
-      .where(eq(locations.id, shift.locationId))
-      .limit(1);
-    const timezone = location?.timezone || 'UTC';
-
-    const { shiftDays, shiftDateBounds } = this.getShiftDateInfo(
-      shift,
-      timezone,
-    );
-
     const exceptions = await dbClient
       .select()
       .from(availabilityExceptions)
-      .where(
-        and(
-          inArray(availabilityExceptions.staffId, staffIds),
-          lte(availabilityExceptions.date, shiftDateBounds.end),
-          gte(availabilityExceptions.date, shiftDateBounds.start),
-        ),
-      );
+      .where(and(inArray(availabilityExceptions.staffId, staffIds)));
 
     const windows = await dbClient
       .select()
       .from(availabilityWindows)
-      .where(
-        and(
-          inArray(availabilityWindows.staffId, staffIds),
-          inArray(availabilityWindows.dayOfWeek, shiftDays),
-        ),
-      );
+      .where(and(inArray(availabilityWindows.staffId, staffIds)));
 
     const exceptionsByStaff = new Map<string, typeof exceptions>();
     exceptions.forEach((exception) => {
@@ -735,44 +689,12 @@ export class ShiftsService {
     };
   }
 
-  private getShiftDateInfo(
-    shift: typeof shifts.$inferSelect,
-    timeZone: string,
-  ) {
-    const startDate = this.toDateKey(shift.startAt, timeZone);
-    const endDate = this.toDateKey(shift.endAt, timeZone);
-    const prevStartDate = this.getPreviousLocalDateKey(shift.startAt, timeZone);
-    const dateKeys = new Set([startDate, endDate, prevStartDate]);
-    const shiftDays = Array.from(dateKeys).map((dateKey) => {
-      const [year, month, day] = dateKey.split('-').map(Number);
-      return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-    });
-    const bounds = Array.from(dateKeys).map((dateKey) => {
-      const [year, month, day] = dateKey.split('-').map(Number);
-      const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-      return { start, end };
-    });
-    const shiftDateBounds = bounds.reduce(
-      (acc, next) => {
-        if (next.start < acc.start) acc.start = next.start;
-        if (next.end > acc.end) acc.end = next.end;
-        return acc;
-      },
-      {
-        start: bounds[0]?.start ?? shift.startAt,
-        end: bounds[0]?.end ?? shift.endAt,
-      },
-    );
-    return { shiftDays, dateKeys, shiftDateBounds };
-  }
-
   private evaluateStaffAvailability(
     shift: typeof shifts.$inferSelect,
     exceptions: Array<typeof availabilityExceptions.$inferSelect>,
     windows: Array<typeof availabilityWindows.$inferSelect>,
   ) {
-    const exceptionHit = exceptions.find((exception) => {
+    const matchingExceptions = exceptions.filter((exception) => {
       const exceptionDate = this.toDateKey(exception.date, exception.timezone);
       const shiftDateKeys = new Set([
         this.toDateKey(shift.startAt, exception.timezone),
@@ -833,10 +755,14 @@ export class ShiftsService {
       return fullyCovers;
     });
 
-    if (exceptionHit?.type === 'unavailable') {
+    if (
+      matchingExceptions.some((exception) => exception.type === 'unavailable')
+    ) {
       return { available: false, reason: 'Staff marked unavailable' };
     }
-    if (exceptionHit?.type === 'available') {
+    if (
+      matchingExceptions.some((exception) => exception.type === 'available')
+    ) {
       return { available: true };
     }
 
