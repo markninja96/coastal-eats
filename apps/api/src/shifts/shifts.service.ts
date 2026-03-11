@@ -510,6 +510,24 @@ export class ShiftsService {
       });
     }
 
+    const duplicateCheck = await dbClient
+      .select({ id: shiftAssignments.id })
+      .from(shiftAssignments)
+      .where(
+        and(
+          eq(shiftAssignments.staffId, staffId),
+          eq(shiftAssignments.shiftId, shift.id),
+          eq(shiftAssignments.status, 'assigned'),
+        ),
+      )
+      .limit(1);
+    if (duplicateCheck.length) {
+      violations.push({
+        code: 'duplicate',
+        message: 'Staff is already assigned to this shift',
+      });
+    }
+
     const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
     const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
     const assignments = await dbClient
@@ -778,9 +796,6 @@ export class ShiftsService {
         exceptionEndMs += 24 * 60 * 60 * 1000;
       }
 
-      if (!exception.startTime || !exception.endTime) {
-        return true;
-      }
       const overlaps =
         exceptionStartMs < shiftEndMs && exceptionEndMs > shiftStartMs;
       const fullyCovers =
@@ -1041,14 +1056,42 @@ export class ShiftsService {
       .where(
         and(...conditions, eq(staffSkills.skillId, shift.requiredSkillId)),
       );
+    const staffIds = staffList.map((staff) => staff.id);
+    const availabilityByStaff = await this.bulkCheckAvailability(
+      dbClient,
+      shift,
+      staffIds,
+    );
+    const assignmentsByStaff = await this.bulkFetchAssignmentsForStaff(
+      dbClient,
+      staffIds,
+      shift,
+    );
     const suggestions: Suggestion[] = [];
 
     for (const staff of staffList) {
-      const violations = await this.checkConstraints(dbClient, {
-        staffId: staff.id,
-        shift,
-      });
-      if (!violations.length) {
+      let hasViolation = false;
+      const availability = availabilityByStaff.get(staff.id) ?? {
+        available: false,
+      };
+      if (!availability.available) {
+        hasViolation = true;
+      }
+      const assignments = assignmentsByStaff.get(staff.id) ?? [];
+      if (assignments.some((assignment) => assignment.shiftId === shift.id)) {
+        hasViolation = true;
+      }
+      if (!hasViolation) {
+        for (const assignment of assignments) {
+          if (assignment.shiftId === shift.id) continue;
+          const violation = this.checkOverlapOrRestViolation(assignment, shift);
+          if (violation) {
+            hasViolation = true;
+            break;
+          }
+        }
+      }
+      if (!hasViolation) {
         suggestions.push({ id: staff.id, name: staff.name });
       }
       if (suggestions.length >= 5) break;
