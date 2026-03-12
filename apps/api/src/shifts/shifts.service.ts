@@ -119,8 +119,8 @@ export class ShiftsService {
     }
   }
 
-  private async assertSkillExists(skillId: string) {
-    const [row] = await this.database
+  private async assertSkillExists(dbClient: DbClient, skillId: string) {
+    const [row] = await dbClient
       .select({ id: skills.id })
       .from(skills)
       .where(eq(skills.id, skillId))
@@ -163,7 +163,13 @@ export class ShiftsService {
         staff: users,
       })
       .from(shifts)
-      .leftJoin(shiftAssignments, eq(shiftAssignments.shiftId, shifts.id))
+      .leftJoin(
+        shiftAssignments,
+        and(
+          eq(shiftAssignments.shiftId, shifts.id),
+          eq(shiftAssignments.status, 'assigned'),
+        ),
+      )
       .leftJoin(users, eq(shiftAssignments.staffId, users.id));
 
     const rows = whereClause ? await query.where(whereClause) : await query;
@@ -213,7 +219,7 @@ export class ShiftsService {
     await this.assertLocationAccess(user, input.locationId);
     await this.assertLocationExists(this.database, input.locationId);
     this.assertShiftTiming(input.startAt, input.endAt);
-    await this.assertSkillExists(input.requiredSkillId);
+    await this.assertSkillExists(this.database, input.requiredSkillId);
 
     const [created] = await this.database
       .insert(shifts)
@@ -266,7 +272,7 @@ export class ShiftsService {
         input.requiredSkillId !== undefined &&
         input.requiredSkillId !== existing.requiredSkillId
       ) {
-        await this.assertSkillExists(input.requiredSkillId);
+        await this.assertSkillExists(tx, input.requiredSkillId);
       }
 
       const assignedStaff = await tx
