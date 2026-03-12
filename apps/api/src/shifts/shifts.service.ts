@@ -160,7 +160,10 @@ export class ShiftsService {
       .select({
         shift: shifts,
         assignment: shiftAssignments,
-        staff: users,
+        staff: {
+          id: users.id,
+          name: users.name,
+        },
       })
       .from(shifts)
       .leftJoin(
@@ -258,13 +261,18 @@ export class ShiftsService {
 
       const nextStart = input.startAt ?? existing.startAt;
       const nextEnd = input.endAt ?? existing.endAt;
+      const timingChanged =
+        (input.startAt !== undefined &&
+          input.startAt.getTime() !== existing.startAt.getTime()) ||
+        (input.endAt !== undefined &&
+          input.endAt.getTime() !== existing.endAt.getTime());
       if (existing.status === 'published') {
         this.assertCutoff(existing.startAt);
-        if (input.startAt) {
+        if (input.startAt && timingChanged) {
           this.assertCutoff(nextStart);
         }
       }
-      if (input.startAt || input.endAt) {
+      if (timingChanged) {
         this.assertShiftTiming(nextStart, nextEnd);
       }
 
@@ -299,7 +307,7 @@ export class ShiftsService {
         });
       }
 
-      const timingChanged =
+      const timingChangedAfterUpdate =
         nextStart.getTime() !== existing.startAt.getTime() ||
         nextEnd.getTime() !== existing.endAt.getTime();
       const locationChanged =
@@ -308,7 +316,7 @@ export class ShiftsService {
       const skillChanged =
         input.requiredSkillId !== undefined &&
         input.requiredSkillId !== existing.requiredSkillId;
-      if (timingChanged || locationChanged || skillChanged) {
+      if (timingChangedAfterUpdate || locationChanged || skillChanged) {
         const nextShift = {
           ...existing,
           startAt: nextStart,
