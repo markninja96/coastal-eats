@@ -825,14 +825,7 @@ export class ShiftsService {
 
   private getLocalTimestamp(date: Date, timeZone: string) {
     const parts = this.getLocalDateParts(date, timeZone);
-    return Date.UTC(
-      parts.year,
-      parts.month - 1,
-      parts.day,
-      parts.hour,
-      parts.minute,
-      parts.second,
-    );
+    return this.getDateFromLocalParts(parts, timeZone).getTime();
   }
 
   private parseTimeParts(value: string) {
@@ -879,22 +872,28 @@ export class ShiftsService {
       const exceptionEndParts = exception.endTime
         ? this.parseTimeParts(exception.endTime)
         : { hour: 24, minute: 0, second: 0 };
-      const exceptionStartMs = Date.UTC(
-        exceptionDateParts.year,
-        exceptionDateParts.month - 1,
-        exceptionDateParts.day,
-        exceptionStartParts.hour,
-        exceptionStartParts.minute,
-        exceptionStartParts.second,
-      );
-      let exceptionEndMs = Date.UTC(
-        exceptionDateParts.year,
-        exceptionDateParts.month - 1,
-        exceptionDateParts.day,
-        exceptionEndParts.hour,
-        exceptionEndParts.minute,
-        exceptionEndParts.second,
-      );
+      const exceptionStartMs = this.getDateFromLocalParts(
+        {
+          year: exceptionDateParts.year,
+          month: exceptionDateParts.month,
+          day: exceptionDateParts.day,
+          hour: exceptionStartParts.hour,
+          minute: exceptionStartParts.minute,
+          second: exceptionStartParts.second,
+        },
+        exception.timezone,
+      ).getTime();
+      let exceptionEndMs = this.getDateFromLocalParts(
+        {
+          year: exceptionDateParts.year,
+          month: exceptionDateParts.month,
+          day: exceptionDateParts.day,
+          hour: exceptionEndParts.hour,
+          minute: exceptionEndParts.minute,
+          second: exceptionEndParts.second,
+        },
+        exception.timezone,
+      ).getTime();
       if (exceptionEndMs <= exceptionStartMs) {
         exceptionEndMs += 24 * 60 * 60 * 1000;
       }
@@ -964,22 +963,28 @@ export class ShiftsService {
 
       const windowStartParts = this.parseTimeParts(window.startTime);
       const windowEndParts = this.parseTimeParts(window.endTime);
-      const windowStartMs = Date.UTC(
-        windowDate.year,
-        windowDate.month - 1,
-        windowDate.day,
-        windowStartParts.hour,
-        windowStartParts.minute,
-        windowStartParts.second,
-      );
-      let windowEndMs = Date.UTC(
-        windowDate.year,
-        windowDate.month - 1,
-        windowDate.day,
-        windowEndParts.hour,
-        windowEndParts.minute,
-        windowEndParts.second,
-      );
+      const windowStartMs = this.getDateFromLocalParts(
+        {
+          year: windowDate.year,
+          month: windowDate.month,
+          day: windowDate.day,
+          hour: windowStartParts.hour,
+          minute: windowStartParts.minute,
+          second: windowStartParts.second,
+        },
+        window.timezone,
+      ).getTime();
+      let windowEndMs = this.getDateFromLocalParts(
+        {
+          year: windowDate.year,
+          month: windowDate.month,
+          day: windowDate.day,
+          hour: windowEndParts.hour,
+          minute: windowEndParts.minute,
+          second: windowEndParts.second,
+        },
+        window.timezone,
+      ).getTime();
       if (windowEndMs <= windowStartMs) {
         windowEndMs += 24 * 60 * 60 * 1000;
       }
