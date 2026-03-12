@@ -253,6 +253,76 @@ export class ShiftsService {
       await this.assertSkillExists(input.requiredSkillId);
     }
 
+    const assignedStaff = await this.database
+      .select({ staffId: shiftAssignments.staffId })
+      .from(shiftAssignments)
+      .where(
+        and(
+          eq(shiftAssignments.shiftId, shiftId),
+          eq(shiftAssignments.status, 'assigned'),
+        ),
+      );
+    const assignedCount = assignedStaff.length;
+    const nextHeadcount = input.headcount ?? existing.headcount;
+    if (nextHeadcount < assignedCount) {
+      throw new BadRequestException({
+        message: 'Shift update violates constraints',
+        violations: [
+          {
+            code: 'headcount',
+            message: 'Headcount cannot be lower than assigned staff',
+          },
+        ],
+      });
+    }
+
+    const timingChanged =
+      nextStart.getTime() !== existing.startAt.getTime() ||
+      nextEnd.getTime() !== existing.endAt.getTime();
+    const locationChanged =
+      input.locationId !== undefined &&
+      input.locationId !== existing.locationId;
+    const skillChanged =
+      input.requiredSkillId !== undefined &&
+      input.requiredSkillId !== existing.requiredSkillId;
+    if (timingChanged || locationChanged || skillChanged) {
+      const nextShift = {
+        ...existing,
+        startAt: nextStart,
+        endAt: nextEnd,
+        locationId: input.locationId ?? existing.locationId,
+        requiredSkillId: input.requiredSkillId ?? existing.requiredSkillId,
+        headcount: nextHeadcount,
+      };
+      const assignmentViolations = [] as Array<{
+        staffId: string;
+        violations: ConstraintViolation[];
+      }>;
+      for (const assignment of assignedStaff) {
+        const violations = await this.checkConstraints(
+          this.database,
+          { staffId: assignment.staffId, shift: nextShift },
+          { includeDuplicateCheck: false },
+        );
+        if (violations.length) {
+          assignmentViolations.push({
+            staffId: assignment.staffId,
+            violations,
+          });
+        }
+      }
+      if (assignmentViolations.length) {
+        throw new BadRequestException({
+          message: 'Shift update violates constraints',
+          violations: assignmentViolations.map((entry) => ({
+            code: 'assignee',
+            message: 'Assigned staff does not meet updated constraints',
+            details: entry,
+          })),
+        });
+      }
+    }
+
     const [updated] = await this.database
       .update(shifts)
       .set({
@@ -459,6 +529,7 @@ export class ShiftsService {
       staffId: string;
       shift: typeof shifts.$inferSelect;
     },
+    options?: { includeDuplicateCheck?: boolean },
   ): Promise<ConstraintViolation[]> {
     const violations: ConstraintViolation[] = [];
 
@@ -500,22 +571,24 @@ export class ShiftsService {
       });
     }
 
-    const duplicateCheck = await dbClient
-      .select({ id: shiftAssignments.id })
-      .from(shiftAssignments)
-      .where(
-        and(
-          eq(shiftAssignments.staffId, staffId),
-          eq(shiftAssignments.shiftId, shift.id),
-          eq(shiftAssignments.status, 'assigned'),
-        ),
-      )
-      .limit(1);
-    if (duplicateCheck.length) {
-      violations.push({
-        code: 'duplicate',
-        message: 'Staff is already assigned to this shift',
-      });
+    if (options?.includeDuplicateCheck ?? true) {
+      const duplicateCheck = await dbClient
+        .select({ id: shiftAssignments.id })
+        .from(shiftAssignments)
+        .where(
+          and(
+            eq(shiftAssignments.staffId, staffId),
+            eq(shiftAssignments.shiftId, shift.id),
+            eq(shiftAssignments.status, 'assigned'),
+          ),
+        )
+        .limit(1);
+      if (duplicateCheck.length) {
+        violations.push({
+          code: 'duplicate',
+          message: 'Staff is already assigned to this shift',
+        });
+      }
     }
 
     const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
@@ -887,67 +960,9 @@ export class ShiftsService {
   async listStaffAvailability(user: AuthUser, shiftId: string) {
     const shift = await this.getShiftOrThrow(shiftId);
     await this.assertLocationAccess(user, shift.locationId);
-
-    const baseConditions = [
-      eq(users.role, 'staff'),
-      eq(staffLocations.locationId, shift.locationId),
-      or(
-        isNull(staffLocations.decertifiedAt),
-        gt(staffLocations.decertifiedAt, shift.endAt),
-      ),
-    ];
-
-    const staffList = await this.database
-      .selectDistinct({ id: users.id, name: users.name })
-      .from(users)
-      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
-      .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-      .where(
-        and(...baseConditions, eq(staffSkills.skillId, shift.requiredSkillId)),
-      );
-
-    const staffIds = staffList.map((staff) => staff.id);
-    const availabilityByStaff = await this.bulkCheckAvailability(
-      this.database,
-      shift,
-      staffIds,
-    );
-    const assignmentsByStaff = await this.bulkFetchAssignmentsForStaff(
-      this.database,
-      staffIds,
-      shift,
-    );
-
-    const results = staffList.map((staff) => {
-      const availability = availabilityByStaff.get(staff.id) ?? {
-        available: false,
-        reason: 'No availability window for this time',
-      };
-      let conflict = null as { reason: string } | null;
-      const assignments = assignmentsByStaff.get(staff.id) ?? [];
-      if (assignments.some((assignment) => assignment.shiftId === shift.id)) {
-        conflict = { reason: 'Already assigned to this shift' };
-      }
-      if (availability.available && !conflict) {
-        for (const assignment of assignments) {
-          if (assignment.shiftId === shift.id) continue;
-          const violation = this.checkOverlapOrRestViolation(assignment, shift);
-          if (violation) {
-            conflict = { reason: violation.message };
-            break;
-          }
-        }
-      }
-      const isAvailable = availability.available && !conflict;
-      return {
-        id: staff.id,
-        name: staff.name,
-        availability: isAvailable ? 'available' : 'unavailable',
-        reason: conflict ? conflict.reason : availability.reason,
-      };
+    return this.screenStaffForShift(this.database, shift, {
+      skillId: shift.requiredSkillId,
     });
-
-    return results;
   }
 
   private async bulkFetchAssignmentsForStaff(
@@ -1027,6 +1042,20 @@ export class ShiftsService {
     dbClient: DbClient,
     shift: typeof shifts.$inferSelect,
   ): Promise<Suggestion[]> {
+    const screenedStaff = await this.screenStaffForShift(dbClient, shift, {
+      skillId: shift.requiredSkillId,
+    });
+    return screenedStaff
+      .filter((staff) => staff.availability === 'available')
+      .slice(0, 5)
+      .map((staff) => ({ id: staff.id, name: staff.name }));
+  }
+
+  private async screenStaffForShift(
+    dbClient: DbClient,
+    shift: typeof shifts.$inferSelect,
+    options?: { skillId?: string },
+  ) {
     const conditions = [
       eq(users.role, 'staff'),
       eq(staffLocations.locationId, shift.locationId),
@@ -1036,16 +1065,18 @@ export class ShiftsService {
       ),
     ];
 
-    const baseQuery = dbClient
-      .selectDistinct({ id: users.id, name: users.name })
-      .from(users)
-      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id));
-
-    const staffList = await baseQuery
-      .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-      .where(
-        and(...conditions, eq(staffSkills.skillId, shift.requiredSkillId)),
-      );
+    const staffList = options?.skillId
+      ? await dbClient
+          .selectDistinct({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+          .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
+          .where(and(...conditions, eq(staffSkills.skillId, options.skillId)))
+      : await dbClient
+          .selectDistinct({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+          .where(and(...conditions));
     const staffIds = staffList.map((staff) => staff.id);
     const availabilityByStaff = await this.bulkCheckAvailability(
       dbClient,
@@ -1057,36 +1088,34 @@ export class ShiftsService {
       staffIds,
       shift,
     );
-    const suggestions: Suggestion[] = [];
 
-    for (const staff of staffList) {
-      let hasViolation = false;
+    return staffList.map((staff) => {
       const availability = availabilityByStaff.get(staff.id) ?? {
         available: false,
+        reason: 'No availability window for this time',
       };
-      if (!availability.available) {
-        hasViolation = true;
-      }
+      let conflict = null as { reason: string } | null;
       const assignments = assignmentsByStaff.get(staff.id) ?? [];
       if (assignments.some((assignment) => assignment.shiftId === shift.id)) {
-        hasViolation = true;
+        conflict = { reason: 'Already assigned to this shift' };
       }
-      if (!hasViolation) {
+      if (availability.available && !conflict) {
         for (const assignment of assignments) {
           if (assignment.shiftId === shift.id) continue;
           const violation = this.checkOverlapOrRestViolation(assignment, shift);
           if (violation) {
-            hasViolation = true;
+            conflict = { reason: violation.message };
             break;
           }
         }
       }
-      if (!hasViolation) {
-        suggestions.push({ id: staff.id, name: staff.name });
-      }
-      if (suggestions.length >= 5) break;
-    }
-
-    return suggestions;
+      const isAvailable = availability.available && !conflict;
+      return {
+        id: staff.id,
+        name: staff.name,
+        availability: isAvailable ? 'available' : 'unavailable',
+        reason: conflict ? conflict.reason : availability.reason,
+      };
+    });
   }
 }
