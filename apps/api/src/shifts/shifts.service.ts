@@ -700,11 +700,11 @@ export class ShiftsService {
       const exceptions = await dbClient
         .select()
         .from(availabilityExceptions)
-        .where(and(inArray(availabilityExceptions.staffId, batch)));
+        .where(inArray(availabilityExceptions.staffId, batch));
       const windows = await dbClient
         .select()
         .from(availabilityWindows)
-        .where(and(inArray(availabilityWindows.staffId, batch)));
+        .where(inArray(availabilityWindows.staffId, batch));
 
       exceptions.forEach((exception) => {
         const list = exceptionsByStaff.get(exception.staffId) ?? [];
