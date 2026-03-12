@@ -654,29 +654,37 @@ export class ShiftsService {
     const results = new Map<string, { available: boolean; reason?: string }>();
     if (!staffIds.length) return results;
 
-    const exceptions = await dbClient
-      .select()
-      .from(availabilityExceptions)
-      .where(and(inArray(availabilityExceptions.staffId, staffIds)));
+    const exceptionsByStaff = new Map<
+      string,
+      Array<typeof availabilityExceptions.$inferSelect>
+    >();
+    const windowsByStaff = new Map<
+      string,
+      Array<typeof availabilityWindows.$inferSelect>
+    >();
+    const batchSize = 200;
+    for (let index = 0; index < staffIds.length; index += batchSize) {
+      const batch = staffIds.slice(index, index + batchSize);
+      const exceptions = await dbClient
+        .select()
+        .from(availabilityExceptions)
+        .where(and(inArray(availabilityExceptions.staffId, batch)));
+      const windows = await dbClient
+        .select()
+        .from(availabilityWindows)
+        .where(and(inArray(availabilityWindows.staffId, batch)));
 
-    const windows = await dbClient
-      .select()
-      .from(availabilityWindows)
-      .where(and(inArray(availabilityWindows.staffId, staffIds)));
-
-    const exceptionsByStaff = new Map<string, typeof exceptions>();
-    exceptions.forEach((exception) => {
-      const list = exceptionsByStaff.get(exception.staffId) ?? [];
-      list.push(exception);
-      exceptionsByStaff.set(exception.staffId, list);
-    });
-
-    const windowsByStaff = new Map<string, typeof windows>();
-    windows.forEach((window) => {
-      const list = windowsByStaff.get(window.staffId) ?? [];
-      list.push(window);
-      windowsByStaff.set(window.staffId, list);
-    });
+      exceptions.forEach((exception) => {
+        const list = exceptionsByStaff.get(exception.staffId) ?? [];
+        list.push(exception);
+        exceptionsByStaff.set(exception.staffId, list);
+      });
+      windows.forEach((window) => {
+        const list = windowsByStaff.get(window.staffId) ?? [];
+        list.push(window);
+        windowsByStaff.set(window.staffId, list);
+      });
+    }
 
     staffIds.forEach((staffId) => {
       const staffExceptions = exceptionsByStaff.get(staffId) ?? [];
@@ -978,33 +986,37 @@ export class ShiftsService {
 
     const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
     const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
-    const assignments = await dbClient
-      .select({
-        staffId: shiftAssignments.staffId,
-        shiftId: shiftAssignments.shiftId,
-        startAt: shifts.startAt,
-        endAt: shifts.endAt,
-      })
-      .from(shiftAssignments)
-      .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
-      .where(
-        and(
-          inArray(shiftAssignments.staffId, staffIds),
-          eq(shiftAssignments.status, 'assigned'),
-          lte(shifts.startAt, windowEnd),
-          gte(shifts.endAt, windowStart),
-        ),
-      );
+    const batchSize = 200;
+    for (let index = 0; index < staffIds.length; index += batchSize) {
+      const batch = staffIds.slice(index, index + batchSize);
+      const assignments = await dbClient
+        .select({
+          staffId: shiftAssignments.staffId,
+          shiftId: shiftAssignments.shiftId,
+          startAt: shifts.startAt,
+          endAt: shifts.endAt,
+        })
+        .from(shiftAssignments)
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .where(
+          and(
+            inArray(shiftAssignments.staffId, batch),
+            eq(shiftAssignments.status, 'assigned'),
+            lte(shifts.startAt, windowEnd),
+            gte(shifts.endAt, windowStart),
+          ),
+        );
 
-    assignments.forEach((assignment) => {
-      const list = assignmentsByStaff.get(assignment.staffId) ?? [];
-      list.push({
-        shiftId: assignment.shiftId,
-        startAt: assignment.startAt,
-        endAt: assignment.endAt,
+      assignments.forEach((assignment) => {
+        const list = assignmentsByStaff.get(assignment.staffId) ?? [];
+        list.push({
+          shiftId: assignment.shiftId,
+          startAt: assignment.startAt,
+          endAt: assignment.endAt,
+        });
+        assignmentsByStaff.set(assignment.staffId, list);
       });
-      assignmentsByStaff.set(assignment.staffId, list);
-    });
+    }
 
     return assignmentsByStaff;
   }
