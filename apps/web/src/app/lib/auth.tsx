@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { create, type StateCreator } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 import { ApiError, apiFetch } from './api';
 
 export type AuthUser = {
@@ -12,13 +11,12 @@ export type AuthUser = {
 };
 
 export type AuthSession = {
-  accessToken: string;
   user: AuthUser | null;
 };
 
 export type AuthContextValue = {
   session: AuthSession | null;
-  status: 'idle' | 'loading' | 'ready';
+  status: 'idle' | 'loading' | 'ready' | 'failed';
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (
     name: string,
@@ -29,7 +27,7 @@ export type AuthContextValue = {
   registerPending: boolean;
   loginError: Error | null;
   registerError: Error | null;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 type AuthStore = {
@@ -46,10 +44,8 @@ type AuthStore = {
     email: string,
     password: string,
   ) => Promise<void>;
-  logout: () => void;
+  clearSession: () => void;
 };
-
-const STORAGE_KEY = 'coastal-eats.auth';
 
 const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
   session: null,
@@ -59,21 +55,28 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
   registerError: null,
   setSession: (session: AuthSession | null) => set({ session }),
   setUser: (user: AuthUser | null) => {
+    if (!user) {
+      set({ session: null });
+      return;
+    }
     const current = get().session;
-    if (!current) return;
+    if (!current) {
+      set({ session: { user } });
+      return;
+    }
     set({ session: { ...current, user } });
   },
   loginWithEmail: async (email: string, password: string) => {
     set({ loginPending: true, loginError: null });
     try {
-      const data = await apiFetch<AuthSession>('/api/auth/login', {
+      const data = await apiFetch<{ user: AuthUser }>('/api/auth/login', {
         method: 'POST',
         body: { email, password },
       });
-      if (!data?.accessToken) {
+      if (!data?.user) {
         throw new Error('Empty auth response');
       }
-      set({ session: data, loginPending: false });
+      set({ session: { user: data.user }, loginPending: false });
     } catch (error) {
       const nextError =
         error instanceof ApiError || error instanceof Error
@@ -89,23 +92,27 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
   registerWithEmail: async (name: string, email: string, password: string) => {
     set({ registerPending: true, registerError: null });
     try {
-      const data = await apiFetch<AuthSession>('/api/auth/register', {
+      const data = await apiFetch<{ user: AuthUser }>('/api/auth/register', {
         method: 'POST',
         body: { name, email, password },
       });
-      if (!data?.accessToken) {
+      if (!data?.user) {
         throw new Error('Empty auth response');
       }
-      set({ session: data, registerPending: false });
+      set({ session: { user: data.user }, registerPending: false });
     } catch (error) {
+      const nextError =
+        error instanceof ApiError || error instanceof Error
+          ? error
+          : new Error(String(error));
       set({
         registerPending: false,
-        registerError: error as Error,
+        registerError: nextError,
       });
       throw error;
     }
   },
-  logout: () =>
+  clearSession: () =>
     set({
       session: null,
       loginPending: false,
@@ -115,44 +122,44 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
     }),
 });
 
-const useAuthStore = create<AuthStore>()(
-  persist(authStoreCreator, {
-    name: STORAGE_KEY,
-    storage: createJSONStorage(() => localStorage),
-    partialize: (state) => ({
-      session: state.session?.accessToken
-        ? { accessToken: '', user: null }
-        : null,
-    }),
-  }),
-);
+const useAuthStore = create<AuthStore>()(authStoreCreator);
 
 function useAuthBootstrap() {
-  const session = useAuthStore((state) => state.session);
   const setUser = useAuthStore((state) => state.setUser);
   const setSession = useAuthStore((state) => state.setSession);
-  const accessToken = session?.accessToken;
+  const queryClient = useQueryClient();
 
   return useQuery({
-    queryKey: ['auth', 'me', accessToken],
+    queryKey: ['auth', 'me'],
     queryFn: async () => {
+      const sessionSnapshot = useAuthStore.getState().session;
       try {
         const user = await apiFetch<AuthUser>('/api/auth/me', {
-          token: accessToken ?? undefined,
+          method: 'GET',
         });
         if (!user) {
           throw new Error('Empty auth response');
+        }
+        if (useAuthStore.getState().session !== sessionSnapshot) {
+          return null;
         }
         setUser(user as AuthUser);
         return user;
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          setSession(null);
+          if (useAuthStore.getState().session === sessionSnapshot) {
+            setSession(null);
+            ['locations', 'skills', 'staff', 'shifts', 'shift-staff'].forEach(
+              (key) => {
+                queryClient.removeQueries({ queryKey: [key] });
+              },
+            );
+          }
+          return null;
         }
         throw error;
       }
     },
-    enabled: Boolean(accessToken),
     staleTime: 60_000,
     retry: 1,
   });
@@ -166,15 +173,19 @@ export function useAuth(): AuthContextValue {
   const registerPending = useAuthStore((state) => state.registerPending);
   const loginError = useAuthStore((state) => state.loginError);
   const registerError = useAuthStore((state) => state.registerError);
-  const logoutStore = useAuthStore((state) => state.logout);
+  const clearSession = useAuthStore((state) => state.clearSession);
   const bootstrap = useAuthBootstrap();
   const queryClient = useQueryClient();
 
-  const status: AuthContextValue['status'] = !session?.accessToken
-    ? 'idle'
-    : bootstrap.isFetching || loginPending || registerPending
-      ? 'loading'
-      : 'ready';
+  const status: AuthContextValue['status'] = bootstrap.isPending
+    ? 'loading'
+    : bootstrap.isError
+      ? 'failed'
+      : loginPending || registerPending
+        ? 'loading'
+        : session?.user
+          ? 'ready'
+          : 'idle';
 
   return {
     session,
@@ -185,9 +196,28 @@ export function useAuth(): AuthContextValue {
     registerPending,
     loginError,
     registerError,
-    logout: () => {
-      logoutStore();
-      queryClient.removeQueries({ queryKey: ['auth'] });
+    logout: async () => {
+      let errorMessage: string | null = null;
+      try {
+        await apiFetch('/api/auth/logout', { method: 'POST' });
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      } finally {
+        clearSession();
+        [
+          'auth',
+          'locations',
+          'skills',
+          'staff',
+          'shifts',
+          'shift-staff',
+        ].forEach((key) => {
+          queryClient.removeQueries({ queryKey: [key] });
+        });
+      }
+      if (errorMessage) {
+        throw new Error(`Logout failed: ${errorMessage}`);
+      }
     },
   };
 }

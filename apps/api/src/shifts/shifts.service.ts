@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, eq, gte, lte, or, isNull, gt } from 'drizzle-orm';
+import { and, eq, gte, lte, or, isNull, gt, inArray, not } from 'drizzle-orm';
 import { DB } from '../db/db.module';
 import { db } from '../db/db';
 import {
@@ -13,6 +13,7 @@ import {
   availabilityWindows,
   locations,
   managerLocations,
+  skills,
   shiftAssignments,
   shifts,
   staffLocations,
@@ -20,6 +21,15 @@ import {
   users,
 } from '../db/schema';
 import type { AuthUser } from '../auth/auth.types';
+import {
+  getShiftMaxDurationMessage,
+  getShiftMinDurationMessage,
+  getShiftMinStartMessage,
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  MIN_REST_PERIOD_MS,
+  MIN_START_MINUTES,
+} from './shifts.constants';
 
 type DbClient = Omit<typeof db, '$client'>;
 
@@ -27,8 +37,9 @@ type ShiftInput = {
   locationId: string;
   startAt: Date;
   endAt: Date;
-  requiredSkillId?: string | null;
+  requiredSkillId: string;
   headcount: number;
+  title: string;
   notes?: string | null;
 };
 
@@ -69,6 +80,17 @@ export class ShiftsService {
     throw new ForbiddenException('Staff cannot manage shifts');
   }
 
+  private async assertLocationExists(dbClient: DbClient, locationId: string) {
+    const [row] = await dbClient
+      .select({ id: locations.id })
+      .from(locations)
+      .where(eq(locations.id, locationId))
+      .limit(1);
+    if (!row) {
+      throw new BadRequestException('Invalid location');
+    }
+  }
+
   private assertCutoff(startAt: Date) {
     const cutoffHours = Number(process.env.SCHEDULE_CUTOFF_HOURS || 48);
     const cutoffMs = cutoffHours * 60 * 60 * 1000;
@@ -76,6 +98,35 @@ export class ShiftsService {
       throw new BadRequestException(
         `Changes are locked within ${cutoffHours} hours of the shift start`,
       );
+    }
+  }
+
+  private assertShiftTiming(startAt: Date, endAt: Date) {
+    const minStart = Date.now() + MIN_START_MINUTES * 60 * 1000;
+    if (startAt.getTime() < minStart) {
+      throw new BadRequestException(getShiftMinStartMessage());
+    }
+
+    const diffMinutes = (endAt.getTime() - startAt.getTime()) / 60000;
+    if (diffMinutes <= 0) {
+      throw new BadRequestException('Shift end must be after start');
+    }
+    if (diffMinutes < MIN_DURATION_MINUTES) {
+      throw new BadRequestException(getShiftMinDurationMessage());
+    }
+    if (diffMinutes > MAX_DURATION_MINUTES) {
+      throw new BadRequestException(getShiftMaxDurationMessage());
+    }
+  }
+
+  private async assertSkillExists(dbClient: DbClient, skillId: string) {
+    const [row] = await dbClient
+      .select({ id: skills.id })
+      .from(skills)
+      .where(eq(skills.id, skillId))
+      .limit(1);
+    if (!row) {
+      throw new BadRequestException('Invalid required skill');
     }
   }
 
@@ -105,15 +156,73 @@ export class ShiftsService {
       ? conditions.reduce((acc, clause) => (acc ? and(acc, clause) : clause))
       : undefined;
 
-    const query = this.database.select().from(shifts);
-    return whereClause ? query.where(whereClause) : query;
+    const query = this.database
+      .select({
+        shift: shifts,
+        assignment: shiftAssignments,
+        staff: {
+          id: users.id,
+          name: users.name,
+        },
+      })
+      .from(shifts)
+      .leftJoin(
+        shiftAssignments,
+        and(
+          eq(shiftAssignments.shiftId, shifts.id),
+          eq(shiftAssignments.status, 'assigned'),
+        ),
+      )
+      .leftJoin(users, eq(shiftAssignments.staffId, users.id));
+
+    const rows = whereClause ? await query.where(whereClause) : await query;
+    const byId = new Map<
+      string,
+      typeof shifts.$inferSelect & {
+        assignments: Array<{
+          id: string;
+          staffId: string;
+          staffName: string;
+          status: string;
+        }>;
+      }
+    >();
+    const assignmentIdsByShift = new Map<string, Set<string>>();
+
+    rows.forEach((row) => {
+      const shift = row.shift;
+      const existing = byId.get(shift.id) ?? {
+        ...shift,
+        assignments: [],
+      };
+      const assignmentIds = assignmentIdsByShift.get(shift.id) ?? new Set();
+      if (
+        row.assignment?.id &&
+        row.staff?.id &&
+        row.assignment.status === 'assigned'
+      ) {
+        if (!assignmentIds.has(row.assignment.id)) {
+          existing.assignments.push({
+            id: row.assignment.id,
+            staffId: row.assignment.staffId,
+            staffName: row.staff.name,
+            status: row.assignment.status,
+          });
+          assignmentIds.add(row.assignment.id);
+        }
+      }
+      byId.set(shift.id, existing);
+      assignmentIdsByShift.set(shift.id, assignmentIds);
+    });
+
+    return Array.from(byId.values());
   }
 
   async create(user: AuthUser, input: ShiftInput) {
     await this.assertLocationAccess(user, input.locationId);
-    if (input.endAt <= input.startAt) {
-      throw new BadRequestException('Shift end must be after start');
-    }
+    await this.assertLocationExists(this.database, input.locationId);
+    this.assertShiftTiming(input.startAt, input.endAt);
+    await this.assertSkillExists(this.database, input.requiredSkillId);
 
     const [created] = await this.database
       .insert(shifts)
@@ -121,9 +230,10 @@ export class ShiftsService {
         locationId: input.locationId,
         startAt: input.startAt,
         endAt: input.endAt,
-        requiredSkillId: input.requiredSkillId ?? null,
+        requiredSkillId: input.requiredSkillId,
         headcount: input.headcount,
         status: 'draft',
+        title: input.title,
         notes: input.notes ?? null,
         createdBy: user.id,
         updatedBy: user.id,
@@ -134,46 +244,137 @@ export class ShiftsService {
   }
 
   async update(user: AuthUser, shiftId: string, input: Partial<ShiftInput>) {
-    const [existing] = await this.database
-      .select()
-      .from(shifts)
-      .where(eq(shifts.id, shiftId))
-      .limit(1);
-    if (!existing) throw new NotFoundException('Shift not found');
+    return this.database.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(shifts)
+        .where(eq(shifts.id, shiftId))
+        .for('update')
+        .limit(1);
+      if (!existing) throw new NotFoundException('Shift not found');
 
-    await this.assertLocationAccess(user, existing.locationId);
-    if (input.locationId && input.locationId !== existing.locationId) {
-      await this.assertLocationAccess(user, input.locationId);
-    }
-    if (existing.status === 'published') {
-      this.assertCutoff(existing.startAt);
-    }
+      await this.assertLocationAccess(user, existing.locationId);
+      if (input.locationId !== undefined) {
+        await this.assertLocationAccess(user, input.locationId);
+        await this.assertLocationExists(tx, input.locationId);
+      }
 
-    const nextStart = input.startAt ?? existing.startAt;
-    const nextEnd = input.endAt ?? existing.endAt;
-    if (nextEnd <= nextStart) {
-      throw new BadRequestException('Shift end must be after start');
-    }
+      const nextStart = input.startAt ?? existing.startAt;
+      const nextEnd = input.endAt ?? existing.endAt;
+      const timingChanged =
+        (input.startAt !== undefined &&
+          input.startAt.getTime() !== existing.startAt.getTime()) ||
+        (input.endAt !== undefined &&
+          input.endAt.getTime() !== existing.endAt.getTime());
+      if (existing.status === 'published') {
+        this.assertCutoff(existing.startAt);
+        if (input.startAt && timingChanged) {
+          this.assertCutoff(nextStart);
+        }
+      }
+      if (timingChanged) {
+        this.assertShiftTiming(nextStart, nextEnd);
+      }
 
-    const [updated] = await this.database
-      .update(shifts)
-      .set({
-        locationId: input.locationId ?? existing.locationId,
-        startAt: nextStart,
-        endAt: nextEnd,
-        requiredSkillId:
-          input.requiredSkillId !== undefined
-            ? input.requiredSkillId
-            : existing.requiredSkillId,
-        headcount: input.headcount ?? existing.headcount,
-        notes: input.notes ?? existing.notes,
-        updatedBy: user.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(shifts.id, shiftId))
-      .returning();
+      if (
+        input.requiredSkillId !== undefined &&
+        input.requiredSkillId !== existing.requiredSkillId
+      ) {
+        await this.assertSkillExists(tx, input.requiredSkillId);
+      }
 
-    return updated;
+      const assignedStaff = await tx
+        .select({ staffId: shiftAssignments.staffId })
+        .from(shiftAssignments)
+        .where(
+          and(
+            eq(shiftAssignments.shiftId, shiftId),
+            eq(shiftAssignments.status, 'assigned'),
+          ),
+        )
+        .for('update');
+      const assignedCount = assignedStaff.length;
+      const nextHeadcount = input.headcount ?? existing.headcount;
+      if (nextHeadcount < assignedCount) {
+        throw new BadRequestException({
+          message: 'Shift update violates constraints',
+          violations: [
+            {
+              code: 'headcount',
+              message: 'Headcount cannot be lower than assigned staff',
+            },
+          ],
+        });
+      }
+
+      const timingChangedAfterUpdate =
+        nextStart.getTime() !== existing.startAt.getTime() ||
+        nextEnd.getTime() !== existing.endAt.getTime();
+      const locationChanged =
+        input.locationId !== undefined &&
+        input.locationId !== existing.locationId;
+      const skillChanged =
+        input.requiredSkillId !== undefined &&
+        input.requiredSkillId !== existing.requiredSkillId;
+      if (timingChangedAfterUpdate || locationChanged || skillChanged) {
+        const nextShift = {
+          ...existing,
+          startAt: nextStart,
+          endAt: nextEnd,
+          locationId: input.locationId ?? existing.locationId,
+          requiredSkillId: input.requiredSkillId ?? existing.requiredSkillId,
+          headcount: nextHeadcount,
+        };
+        const assignmentViolations = [] as Array<{
+          staffId: string;
+          violations: ConstraintViolation[];
+        }>;
+        for (const assignment of assignedStaff) {
+          const violations = await this.checkConstraints(
+            tx,
+            { staffId: assignment.staffId, shift: nextShift },
+            { includeDuplicateCheck: false },
+          );
+          if (violations.length) {
+            assignmentViolations.push({
+              staffId: assignment.staffId,
+              violations,
+            });
+          }
+        }
+        if (assignmentViolations.length) {
+          throw new BadRequestException({
+            message: 'Shift update violates constraints',
+            violations: assignmentViolations.map((entry) => ({
+              code: 'assignee',
+              message: 'Assigned staff does not meet updated constraints',
+              details: entry,
+            })),
+          });
+        }
+      }
+
+      const [updated] = await tx
+        .update(shifts)
+        .set({
+          locationId: input.locationId ?? existing.locationId,
+          startAt: nextStart,
+          endAt: nextEnd,
+          requiredSkillId:
+            input.requiredSkillId !== undefined
+              ? input.requiredSkillId
+              : existing.requiredSkillId,
+          headcount: input.headcount ?? existing.headcount,
+          title: input.title ?? existing.title,
+          notes: input.notes === undefined ? existing.notes : input.notes,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(shifts.id, shiftId))
+        .returning();
+
+      return updated;
+    });
   }
 
   async publish(user: AuthUser, shiftId: string) {
@@ -252,6 +453,30 @@ export class ShiftsService {
           throw new BadRequestException({
             message: 'Assignment violates constraints',
             violations,
+            suggestions,
+          });
+        }
+
+        const existingAssignments = await tx
+          .select({ id: shiftAssignments.id })
+          .from(shiftAssignments)
+          .where(
+            and(
+              eq(shiftAssignments.shiftId, shift.id),
+              eq(shiftAssignments.status, 'assigned'),
+            ),
+          )
+          .for('update');
+        if (existingAssignments.length >= shift.headcount) {
+          const suggestions = await this.suggestStaff(tx, shift);
+          throw new BadRequestException({
+            message: 'Assignment violates constraints',
+            violations: [
+              {
+                code: 'headcount',
+                message: 'Shift is fully assigned',
+              },
+            ],
             suggestions,
           });
         }
@@ -336,6 +561,7 @@ export class ShiftsService {
       staffId: string;
       shift: typeof shifts.$inferSelect;
     },
+    options?: { includeDuplicateCheck?: boolean },
   ): Promise<ConstraintViolation[]> {
     const violations: ConstraintViolation[] = [];
 
@@ -360,27 +586,45 @@ export class ShiftsService {
       });
     }
 
-    if (shift.requiredSkillId) {
-      const skillCheck = await dbClient
-        .select()
-        .from(staffSkills)
+    const skillCheck = await dbClient
+      .select()
+      .from(staffSkills)
+      .where(
+        and(
+          eq(staffSkills.staffId, staffId),
+          eq(staffSkills.skillId, shift.requiredSkillId),
+        ),
+      )
+      .limit(1);
+    if (!skillCheck.length) {
+      violations.push({
+        code: 'skill',
+        message: 'Staff lacks required skill',
+      });
+    }
+
+    if (options?.includeDuplicateCheck ?? true) {
+      const duplicateCheck = await dbClient
+        .select({ id: shiftAssignments.id })
+        .from(shiftAssignments)
         .where(
           and(
-            eq(staffSkills.staffId, staffId),
-            eq(staffSkills.skillId, shift.requiredSkillId),
+            eq(shiftAssignments.staffId, staffId),
+            eq(shiftAssignments.shiftId, shift.id),
+            eq(shiftAssignments.status, 'assigned'),
           ),
         )
         .limit(1);
-      if (!skillCheck.length) {
+      if (duplicateCheck.length) {
         violations.push({
-          code: 'skill',
-          message: 'Staff lacks required skill',
+          code: 'duplicate',
+          message: 'Staff is already assigned to this shift',
         });
       }
     }
 
-    const windowStart = new Date(shift.startAt.getTime() - 10 * 60 * 60 * 1000);
-    const windowEnd = new Date(shift.endAt.getTime() + 10 * 60 * 60 * 1000);
+    const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
+    const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
     const assignments = await dbClient
       .select({
         startAt: shifts.startAt,
@@ -391,6 +635,7 @@ export class ShiftsService {
       .where(
         and(
           eq(shiftAssignments.staffId, staffId),
+          not(eq(shiftAssignments.shiftId, shift.id)),
           eq(shiftAssignments.status, 'assigned'),
           lte(shifts.startAt, windowEnd),
           gte(shifts.endAt, windowStart),
@@ -398,28 +643,9 @@ export class ShiftsService {
       );
 
     assignments.forEach((assignment) => {
-      const overlaps =
-        assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
-      if (overlaps) {
-        violations.push({
-          code: 'overlap',
-          message: 'Staff is already assigned to an overlapping shift',
-        });
-      }
-
-      const restBefore =
-        assignment.endAt <= shift.startAt &&
-        shift.startAt.getTime() - assignment.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      const restAfter =
-        assignment.startAt >= shift.endAt &&
-        assignment.startAt.getTime() - shift.endAt.getTime() <
-          10 * 60 * 60 * 1000;
-      if (restBefore || restAfter) {
-        violations.push({
-          code: 'rest',
-          message: 'Staff does not have 10 hours between shifts',
-        });
+      const violation = this.checkOverlapOrRestViolation(assignment, shift);
+      if (violation) {
+        violations.push(violation);
       }
     });
 
@@ -439,92 +665,331 @@ export class ShiftsService {
     staffId: string,
     shift: typeof shifts.$inferSelect,
   ) {
-    const [location] = await dbClient
-      .select()
-      .from(locations)
-      .where(eq(locations.id, shift.locationId))
-      .limit(1);
-    const timezone = location?.timezone || 'UTC';
-
-    const shiftDate = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(shift.startAt);
-    const [month, day, year] = shiftDate.split('/').map(Number);
-    const shiftDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-
     const exceptions = await dbClient
       .select()
       .from(availabilityExceptions)
-      .where(
-        and(
-          eq(availabilityExceptions.staffId, staffId),
-          lte(availabilityExceptions.date, shift.endAt),
-          gte(availabilityExceptions.date, shift.startAt),
-        ),
-      );
-
-    const toDateKey = (date: Date, tz: string) =>
-      new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(date);
-
-    const toTimeKey = (date: Date, tz: string) =>
-      new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(date) + ':00';
-
-    const exceptionHit = exceptions.find((exception) => {
-      const exceptionDate = toDateKey(exception.date, exception.timezone);
-      if (exceptionDate !== shiftDate) return false;
-      if (exception.locationId && exception.locationId !== shift.locationId) {
-        return false;
-      }
-      if (!exception.startTime || !exception.endTime) return true;
-      const shiftStartKey = toTimeKey(shift.startAt, exception.timezone);
-      const shiftEndKey = toTimeKey(shift.endAt, exception.timezone);
-      const overlaps =
-        exception.startTime <= shiftEndKey &&
-        exception.endTime >= shiftStartKey;
-      const fullyCovers =
-        exception.startTime <= shiftStartKey &&
-        exception.endTime >= shiftEndKey;
-      if (exception.type === 'unavailable') return overlaps;
-      return fullyCovers;
-    });
-
-    if (exceptionHit?.type === 'unavailable') {
-      return { available: false, reason: 'Staff marked unavailable' };
-    }
-    if (exceptionHit?.type === 'available') {
-      return { available: true };
-    }
+      .where(eq(availabilityExceptions.staffId, staffId));
 
     const windows = await dbClient
       .select()
       .from(availabilityWindows)
-      .where(
-        and(
-          eq(availabilityWindows.staffId, staffId),
-          eq(availabilityWindows.dayOfWeek, shiftDay),
-        ),
+      .where(eq(availabilityWindows.staffId, staffId));
+
+    return this.evaluateStaffAvailability(shift, exceptions, windows);
+  }
+
+  private async bulkCheckAvailability(
+    dbClient: DbClient,
+    shift: typeof shifts.$inferSelect,
+    staffIds: string[],
+  ) {
+    const results = new Map<string, { available: boolean; reason?: string }>();
+    if (!staffIds.length) return results;
+
+    const exceptionsByStaff = new Map<
+      string,
+      Array<typeof availabilityExceptions.$inferSelect>
+    >();
+    const windowsByStaff = new Map<
+      string,
+      Array<typeof availabilityWindows.$inferSelect>
+    >();
+    const batchSize = 200;
+    for (let index = 0; index < staffIds.length; index += batchSize) {
+      const batch = staffIds.slice(index, index + batchSize);
+      const exceptions = await dbClient
+        .select()
+        .from(availabilityExceptions)
+        .where(inArray(availabilityExceptions.staffId, batch));
+      const windows = await dbClient
+        .select()
+        .from(availabilityWindows)
+        .where(inArray(availabilityWindows.staffId, batch));
+
+      exceptions.forEach((exception) => {
+        const list = exceptionsByStaff.get(exception.staffId) ?? [];
+        list.push(exception);
+        exceptionsByStaff.set(exception.staffId, list);
+      });
+      windows.forEach((window) => {
+        const list = windowsByStaff.get(window.staffId) ?? [];
+        list.push(window);
+        windowsByStaff.set(window.staffId, list);
+      });
+    }
+
+    staffIds.forEach((staffId) => {
+      const staffExceptions = exceptionsByStaff.get(staffId) ?? [];
+      const staffWindows = windowsByStaff.get(staffId) ?? [];
+      const availability = this.evaluateStaffAvailability(
+        shift,
+        staffExceptions,
+        staffWindows,
       );
+      results.set(staffId, availability);
+    });
+
+    return results;
+  }
+
+  private toDateKey(date: Date, timeZone: string) {
+    const parts = this.getLocalDateParts(date, timeZone);
+    const year = String(parts.year).padStart(4, '0');
+    const month = String(parts.month).padStart(2, '0');
+    const day = String(parts.day).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private getLocalDateParts(date: Date, timeZone: string) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+    const values: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') values[part.type] = Number(part.value);
+    }
+    return {
+      year: values.year,
+      month: values.month,
+      day: values.day,
+      hour: values.hour,
+      minute: values.minute,
+      second: values.second,
+    };
+  }
+
+  private getDateFromLocalParts(
+    parts: {
+      year: number;
+      month: number;
+      day: number;
+      hour: number;
+      minute: number;
+      second: number;
+    },
+    timeZone: string,
+  ) {
+    const utcGuess = new Date(
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        parts.hour,
+        parts.minute,
+        parts.second,
+      ),
+    );
+    const actual = this.getLocalDateParts(utcGuess, timeZone);
+    const desiredUtc = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    const actualUtc = Date.UTC(
+      actual.year,
+      actual.month - 1,
+      actual.day,
+      actual.hour,
+      actual.minute,
+      actual.second,
+    );
+    const diff = desiredUtc - actualUtc;
+    return new Date(utcGuess.getTime() + diff);
+  }
+
+  private getPreviousLocalDateKey(date: Date, timeZone: string) {
+    const parts = this.getLocalDateParts(date, timeZone);
+    const prevDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+    prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+    const prevParts = {
+      year: prevDate.getUTCFullYear(),
+      month: prevDate.getUTCMonth() + 1,
+      day: prevDate.getUTCDate(),
+      hour: 0,
+      minute: 0,
+      second: 0,
+    };
+    const prevLocalDate = this.getDateFromLocalParts(prevParts, timeZone);
+    return this.toDateKey(prevLocalDate, timeZone);
+  }
+
+  private getLocalTimestamp(date: Date, timeZone: string) {
+    const parts = this.getLocalDateParts(date, timeZone);
+    return this.getDateFromLocalParts(parts, timeZone).getTime();
+  }
+
+  private parseTimeParts(value: string) {
+    const [hour, minute, second] = value.split(':').map(Number);
+    return {
+      hour: Number.isFinite(hour) ? hour : 0,
+      minute: Number.isFinite(minute) ? minute : 0,
+      second: Number.isFinite(second) ? second : 0,
+    };
+  }
+
+  private evaluateStaffAvailability(
+    shift: typeof shifts.$inferSelect,
+    exceptions: Array<typeof availabilityExceptions.$inferSelect>,
+    windows: Array<typeof availabilityWindows.$inferSelect>,
+  ) {
+    const matchingExceptions = exceptions.filter((exception) => {
+      const exceptionDate = this.toDateKey(exception.date, exception.timezone);
+      const shiftDateKeys = new Set([
+        this.toDateKey(shift.startAt, exception.timezone),
+        this.toDateKey(shift.endAt, exception.timezone),
+        this.getPreviousLocalDateKey(shift.startAt, exception.timezone),
+      ]);
+      if (!shiftDateKeys.has(exceptionDate)) return false;
+      if (exception.locationId && exception.locationId !== shift.locationId) {
+        return false;
+      }
+      const shiftStartMs = this.getLocalTimestamp(
+        shift.startAt,
+        exception.timezone,
+      );
+      let shiftEndMs = this.getLocalTimestamp(shift.endAt, exception.timezone);
+      if (shiftEndMs <= shiftStartMs) {
+        shiftEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      const exceptionDateParts = this.getLocalDateParts(
+        exception.date,
+        exception.timezone,
+      );
+      const exceptionStartParts = exception.startTime
+        ? this.parseTimeParts(exception.startTime)
+        : { hour: 0, minute: 0, second: 0 };
+      const exceptionEndParts = exception.endTime
+        ? this.parseTimeParts(exception.endTime)
+        : { hour: 24, minute: 0, second: 0 };
+      const exceptionStartMs = this.getDateFromLocalParts(
+        {
+          year: exceptionDateParts.year,
+          month: exceptionDateParts.month,
+          day: exceptionDateParts.day,
+          hour: exceptionStartParts.hour,
+          minute: exceptionStartParts.minute,
+          second: exceptionStartParts.second,
+        },
+        exception.timezone,
+      ).getTime();
+      let exceptionEndMs = this.getDateFromLocalParts(
+        {
+          year: exceptionDateParts.year,
+          month: exceptionDateParts.month,
+          day: exceptionDateParts.day,
+          hour: exceptionEndParts.hour,
+          minute: exceptionEndParts.minute,
+          second: exceptionEndParts.second,
+        },
+        exception.timezone,
+      ).getTime();
+      if (exceptionEndMs <= exceptionStartMs) {
+        exceptionEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      const overlaps =
+        exceptionStartMs < shiftEndMs && exceptionEndMs > shiftStartMs;
+      const fullyCovers =
+        exceptionStartMs <= shiftStartMs && exceptionEndMs >= shiftEndMs;
+      if (exception.type === 'unavailable') return overlaps;
+      return fullyCovers;
+    });
+
+    if (
+      matchingExceptions.some((exception) => exception.type === 'unavailable')
+    ) {
+      return { available: false, reason: 'Staff marked unavailable' };
+    }
+    if (
+      matchingExceptions.some((exception) => exception.type === 'available')
+    ) {
+      return { available: true };
+    }
 
     const matchingWindow = windows.find((window) => {
       if (window.locationId && window.locationId !== shift.locationId) {
         return false;
       }
-      const shiftStartKey = toTimeKey(shift.startAt, window.timezone);
-      const shiftEndKey = toTimeKey(shift.endAt, window.timezone);
-      return window.startTime <= shiftStartKey && window.endTime >= shiftEndKey;
+      const shiftStartMs = this.getLocalTimestamp(
+        shift.startAt,
+        window.timezone,
+      );
+      let shiftEndMs = this.getLocalTimestamp(shift.endAt, window.timezone);
+      if (shiftEndMs <= shiftStartMs) {
+        shiftEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      const startParts = this.getLocalDateParts(shift.startAt, window.timezone);
+      const endParts = this.getLocalDateParts(shift.endAt, window.timezone);
+      const startDay = new Date(
+        Date.UTC(startParts.year, startParts.month - 1, startParts.day),
+      ).getUTCDay();
+      const endDay = new Date(
+        Date.UTC(endParts.year, endParts.month - 1, endParts.day),
+      ).getUTCDay();
+      const prevStartDate = new Date(
+        Date.UTC(startParts.year, startParts.month - 1, startParts.day),
+      );
+      prevStartDate.setUTCDate(prevStartDate.getUTCDate() - 1);
+      const prevStartParts = {
+        year: prevStartDate.getUTCFullYear(),
+        month: prevStartDate.getUTCMonth() + 1,
+        day: prevStartDate.getUTCDate(),
+        hour: startParts.hour,
+        minute: startParts.minute,
+        second: startParts.second,
+      };
+      const dayBeforeStart = prevStartDate.getUTCDay();
+      let windowDate: typeof startParts | null = null;
+      if (window.dayOfWeek === endDay) {
+        windowDate = endParts;
+      } else if (window.dayOfWeek === startDay) {
+        windowDate = startParts;
+      } else if (window.dayOfWeek === dayBeforeStart) {
+        windowDate = prevStartParts;
+      }
+      if (!windowDate) return false;
+
+      const windowStartParts = this.parseTimeParts(window.startTime);
+      const windowEndParts = this.parseTimeParts(window.endTime);
+      const windowStartMs = this.getDateFromLocalParts(
+        {
+          year: windowDate.year,
+          month: windowDate.month,
+          day: windowDate.day,
+          hour: windowStartParts.hour,
+          minute: windowStartParts.minute,
+          second: windowStartParts.second,
+        },
+        window.timezone,
+      ).getTime();
+      let windowEndMs = this.getDateFromLocalParts(
+        {
+          year: windowDate.year,
+          month: windowDate.month,
+          day: windowDate.day,
+          hour: windowEndParts.hour,
+          minute: windowEndParts.minute,
+          second: windowEndParts.second,
+        },
+        window.timezone,
+      ).getTime();
+      if (windowEndMs <= windowStartMs) {
+        windowEndMs += 24 * 60 * 60 * 1000;
+      }
+
+      return windowStartMs <= shiftStartMs && windowEndMs >= shiftEndMs;
     });
 
     if (!matchingWindow) {
@@ -537,10 +1002,109 @@ export class ShiftsService {
     return { available: true };
   }
 
+  async listStaffAvailability(user: AuthUser, shiftId: string) {
+    const shift = await this.getShiftOrThrow(shiftId);
+    await this.assertLocationAccess(user, shift.locationId);
+    return this.screenStaffForShift(this.database, shift, {
+      skillId: shift.requiredSkillId,
+    });
+  }
+
+  private async bulkFetchAssignmentsForStaff(
+    dbClient: DbClient,
+    staffIds: string[],
+    shift: typeof shifts.$inferSelect,
+  ) {
+    const assignmentsByStaff = new Map<
+      string,
+      Array<{ shiftId: string; startAt: Date; endAt: Date }>
+    >();
+    if (!staffIds.length) return assignmentsByStaff;
+
+    const windowStart = new Date(shift.startAt.getTime() - MIN_REST_PERIOD_MS);
+    const windowEnd = new Date(shift.endAt.getTime() + MIN_REST_PERIOD_MS);
+    const batchSize = 200;
+    for (let index = 0; index < staffIds.length; index += batchSize) {
+      const batch = staffIds.slice(index, index + batchSize);
+      const assignments = await dbClient
+        .select({
+          staffId: shiftAssignments.staffId,
+          shiftId: shiftAssignments.shiftId,
+          startAt: shifts.startAt,
+          endAt: shifts.endAt,
+        })
+        .from(shiftAssignments)
+        .innerJoin(shifts, eq(shiftAssignments.shiftId, shifts.id))
+        .where(
+          and(
+            inArray(shiftAssignments.staffId, batch),
+            eq(shiftAssignments.status, 'assigned'),
+            lte(shifts.startAt, windowEnd),
+            gte(shifts.endAt, windowStart),
+          ),
+        );
+
+      assignments.forEach((assignment) => {
+        const list = assignmentsByStaff.get(assignment.staffId) ?? [];
+        list.push({
+          shiftId: assignment.shiftId,
+          startAt: assignment.startAt,
+          endAt: assignment.endAt,
+        });
+        assignmentsByStaff.set(assignment.staffId, list);
+      });
+    }
+
+    return assignmentsByStaff;
+  }
+
+  private checkOverlapOrRestViolation(
+    assignment: { startAt: Date; endAt: Date },
+    shift: typeof shifts.$inferSelect,
+  ) {
+    const overlaps =
+      assignment.startAt < shift.endAt && assignment.endAt > shift.startAt;
+    if (overlaps) {
+      return {
+        code: 'overlap',
+        message: 'Staff is already assigned to an overlapping shift',
+      } as const;
+    }
+
+    const restBefore =
+      assignment.endAt <= shift.startAt &&
+      shift.startAt.getTime() - assignment.endAt.getTime() < MIN_REST_PERIOD_MS;
+    const restAfter =
+      assignment.startAt >= shift.endAt &&
+      assignment.startAt.getTime() - shift.endAt.getTime() < MIN_REST_PERIOD_MS;
+    if (restBefore || restAfter) {
+      return {
+        code: 'rest',
+        message: 'Staff does not have 10 hours between shifts',
+      } as const;
+    }
+
+    return null;
+  }
+
   private async suggestStaff(
     dbClient: DbClient,
     shift: typeof shifts.$inferSelect,
   ): Promise<Suggestion[]> {
+    const screenedStaff = await this.screenStaffForShift(dbClient, shift, {
+      skillId: shift.requiredSkillId,
+    });
+    return screenedStaff
+      .filter((staff) => staff.availability === 'available')
+      .slice(0, 5)
+      .map((staff) => ({ id: staff.id, name: staff.name }));
+  }
+
+  private async screenStaffForShift(
+    dbClient: DbClient,
+    shift: typeof shifts.$inferSelect,
+    options?: { skillId?: string },
+  ) {
     const conditions = [
       eq(users.role, 'staff'),
       eq(staffLocations.locationId, shift.locationId),
@@ -550,33 +1114,57 @@ export class ShiftsService {
       ),
     ];
 
-    const skillCondition = shift.requiredSkillId
-      ? eq(staffSkills.skillId, shift.requiredSkillId)
-      : undefined;
-
-    const baseQuery = dbClient
-      .select({ id: users.id, name: users.name })
-      .from(users)
-      .innerJoin(staffLocations, eq(staffLocations.staffId, users.id));
-
-    const staffList = skillCondition
-      ? await baseQuery
+    const staffList = options?.skillId
+      ? await dbClient
+          .selectDistinct({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
           .innerJoin(staffSkills, eq(staffSkills.staffId, users.id))
-          .where(and(...conditions, skillCondition))
-      : await baseQuery.where(and(...conditions));
-    const suggestions: Suggestion[] = [];
+          .where(and(...conditions, eq(staffSkills.skillId, options.skillId)))
+      : await dbClient
+          .selectDistinct({ id: users.id, name: users.name })
+          .from(users)
+          .innerJoin(staffLocations, eq(staffLocations.staffId, users.id))
+          .where(and(...conditions));
+    const staffIds = staffList.map((staff) => staff.id);
+    const availabilityByStaff = await this.bulkCheckAvailability(
+      dbClient,
+      shift,
+      staffIds,
+    );
+    const assignmentsByStaff = await this.bulkFetchAssignmentsForStaff(
+      dbClient,
+      staffIds,
+      shift,
+    );
 
-    for (const staff of staffList) {
-      const violations = await this.checkConstraints(dbClient, {
-        staffId: staff.id,
-        shift,
-      });
-      if (!violations.length) {
-        suggestions.push({ id: staff.id, name: staff.name });
+    return staffList.map((staff) => {
+      const availability = availabilityByStaff.get(staff.id) ?? {
+        available: false,
+        reason: 'No availability window for this time',
+      };
+      let conflict = null as { reason: string } | null;
+      const assignments = assignmentsByStaff.get(staff.id) ?? [];
+      if (assignments.some((assignment) => assignment.shiftId === shift.id)) {
+        conflict = { reason: 'Already assigned to this shift' };
       }
-      if (suggestions.length >= 5) break;
-    }
-
-    return suggestions;
+      if (availability.available && !conflict) {
+        for (const assignment of assignments) {
+          if (assignment.shiftId === shift.id) continue;
+          const violation = this.checkOverlapOrRestViolation(assignment, shift);
+          if (violation) {
+            conflict = { reason: violation.message };
+            break;
+          }
+        }
+      }
+      const isAvailable = availability.available && !conflict;
+      return {
+        id: staff.id,
+        name: staff.name,
+        availability: isAvailable ? 'available' : 'unavailable',
+        reason: conflict ? conflict.reason : availability.reason,
+      };
+    });
   }
 }

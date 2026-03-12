@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Select } from './select';
+import { buildTimezoneOffsetMap } from '../lib/timezones';
 
 const fallbackTimezones = [
   'America/Los_Angeles',
@@ -30,6 +31,7 @@ export function TimezoneSelect(props: TimezoneSelectProps) {
   const nativeOnChange =
     rest.onChange as React.SelectHTMLAttributes<HTMLSelectElement>['onChange'];
   const [timezones] = React.useState(() => getTimezones());
+  const [offsets] = React.useState(() => buildTimezoneOffsetMap(timezones));
 
   return (
     <Select
@@ -44,7 +46,7 @@ export function TimezoneSelect(props: TimezoneSelectProps) {
       <option value="">Select timezone</option>
       {timezones.map((zone) => (
         <option key={zone} value={zone}>
-          {zone}
+          {offsets[zone] ? `${zone} (${offsets[zone]})` : zone}
         </option>
       ))}
     </Select>

@@ -4,6 +4,7 @@ import {
   useNavigate,
   useRouterState,
 } from '@tanstack/react-router';
+import { toast } from 'sonner';
 import { useAuth } from './lib/auth';
 
 type NavItem = {
@@ -21,16 +22,29 @@ const PROTECTED_NAV: NavItem[] = [
   { to: '/audit', label: 'Audit' },
 ];
 
+const ADMIN_NAV: NavItem[] = [{ to: '/admin', label: 'Admin' }];
+
 const PUBLIC_NAV: NavItem[] = [{ to: '/components', label: 'Components' }];
 
 export function AppLayout() {
   const { session, status, logout } = useAuth();
   const navigate = useNavigate();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
+  const location = useRouterState({
+    select: (state) => state.location,
   });
+  const pathname = location.pathname;
   const isLoading = status === 'loading';
   const signedInName = session?.user?.name ?? session?.user?.email;
+  const protectedRoutes = [
+    ...PROTECTED_NAV.map((item) => item.to),
+    ...ADMIN_NAV.map((item) => item.to),
+  ];
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    // Prefix match so protected base paths cover nested routes.
+    route === '/'
+      ? pathname === '/'
+      : pathname === route || pathname.startsWith(`${route}/`),
+  );
   const initials = signedInName
     ? signedInName
         .split(' ')
@@ -44,7 +58,7 @@ export function AppLayout() {
     <div className="min-h-screen bg-sky-700 text-ink">
       <header className="border-b border-white/15 bg-sand/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-coral text-white grid place-items-center font-semibold">
               CE
             </div>
@@ -52,9 +66,13 @@ export function AppLayout() {
               <p className="font-display text-lg leading-none">ShiftSync</p>
               <p className="text-xs text-ink/60">Coastal Eats</p>
             </div>
-          </div>
+          </Link>
           <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
-            {[...(session ? PROTECTED_NAV : []), ...PUBLIC_NAV].map((item) => {
+            {[
+              ...(session ? PROTECTED_NAV : []),
+              ...(session?.user?.role === 'admin' ? ADMIN_NAV : []),
+              ...PUBLIC_NAV,
+            ].map((item) => {
               const isActive = pathname === item.to;
               return (
                 <Link
@@ -97,35 +115,37 @@ export function AppLayout() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
-                    navigate({ to: '/login' });
+                  onClick={async () => {
+                    try {
+                      await logout();
+                      navigate({ to: '/login' });
+                    } catch (error) {
+                      const message =
+                        error instanceof Error
+                          ? error.message
+                          : 'Unable to sign out. Please try again.';
+                      toast.error(message);
+                    }
                   }}
                   className="rounded-full border border-white/30 px-2 py-0.5 text-xs text-ink/70 hover:border-white/60"
                 >
                   Sign out
                 </button>
               </div>
-            ) : isLoading ? (
-              <span className="rounded-full border border-white/20 px-3 py-1.5 text-xs text-ink/60">
-                Checking session...
-              </span>
-            ) : (
-              <Link
-                to="/login"
-                className="rounded-full border border-white/30 px-3 py-1.5 text-xs text-ink/80 hover:border-white/60"
-              >
-                Sign in
-              </Link>
-            )}
-            <button className="rounded-full border border-white/30 bg-mist/60 px-3 py-1.5 text-white hover:border-white/50">
-              Seattle
-            </button>
+            ) : null}
           </nav>
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-6 py-8">
-        <Outlet />
+        {isProtectedRoute && isLoading ? (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-8 text-sm text-ink/70">
+              Checking session...
+            </div>
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </main>
     </div>
   );

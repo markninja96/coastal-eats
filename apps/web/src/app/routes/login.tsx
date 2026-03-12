@@ -45,7 +45,6 @@ export function LoginRoute() {
     loginError,
     registerError,
     session,
-    status,
   } = useAuth();
   const { redirect } = useSearch({ from: '/login' }) as { redirect?: string };
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -54,9 +53,9 @@ export function LoginRoute() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const isSubmitting = status === 'loading';
-  const isLoginPending = isSubmitting || loginPending;
-  const isRegisterPending = isSubmitting || registerPending;
+  const isSubmitting = loginPending || registerPending;
+  const isLoginPending = loginPending;
+  const isRegisterPending = registerPending;
   const redirectTo = redirect ?? '/';
   const errorSource = mode === 'login' ? loginError : registerError;
   const error = (() => {
@@ -105,7 +104,7 @@ export function LoginRoute() {
     }
   };
 
-  if (session?.accessToken) {
+  if (session?.user) {
     return <Navigate to={redirectTo} />;
   }
 
@@ -293,6 +292,7 @@ export function LoginRoute() {
               onClick={() => {
                 window.location.href = apiUrl('/api/auth/google');
               }}
+              disabled={isSubmitting}
             >
               Continue with Google
             </Button>

@@ -42,6 +42,7 @@ export async function apiFetch<T>(
   })();
   const response = await fetch(apiUrl(path), {
     ...rest,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : null),

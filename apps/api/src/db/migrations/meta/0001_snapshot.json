@@ -1,6 +1,6 @@
 {
-  "id": "6e345fec-475f-45f4-afe5-56506c54d9f6",
-  "prevId": "63e1a32c-fe97-4735-aca1-3448e11e87ed",
+  "id": "6d1b2c5c-fe49-4437-9231-fccf9cbc9cb0",
+  "prevId": "ab0ee8c8-9e55-4713-99f0-da15a81ac834",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -231,6 +231,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "region": {
+          "name": "region",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "timezone": {
           "name": "timezone",
           "type": "text",
@@ -252,7 +270,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "uq_locations_name": {
+          "name": "uq_locations_name",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -416,9 +450,25 @@
       "indexes": {
         "uq_shift_staff_active": {
           "name": "uq_shift_staff_active",
-          "columns": ["shift_id", "staff_id"],
+          "columns": [
+            {
+              "expression": "shift_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "staff_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
           "isUnique": true,
-          "where": "status = 'assigned'"
+          "where": "\"shift_assignments\".\"status\" = $1",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -476,6 +526,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'draft'"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Shift'"
         },
         "notes": {
           "name": "notes",
@@ -873,19 +930,41 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
+      "indexes": {
         "uq_users_email": {
           "name": "uq_users_email",
-          "columns": ["email"]
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "uq_users_google_id": {
           "name": "uq_users_google_id",
-          "columns": ["google_id"]
+          "columns": [
+            {
+              "expression": "google_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -895,17 +974,26 @@
     "public.assignment_status": {
       "name": "assignment_status",
       "schema": "public",
-      "values": ["assigned", "cancelled"]
+      "values": [
+        "assigned",
+        "cancelled"
+      ]
     },
     "public.availability_exception_type": {
       "name": "availability_exception_type",
       "schema": "public",
-      "values": ["available", "unavailable"]
+      "values": [
+        "available",
+        "unavailable"
+      ]
     },
     "public.shift_status": {
       "name": "shift_status",
       "schema": "public",
-      "values": ["draft", "published"]
+      "values": [
+        "draft",
+        "published"
+      ]
     },
     "public.swap_status": {
       "name": "swap_status",
@@ -922,12 +1010,19 @@
     "public.swap_type": {
       "name": "swap_type",
       "schema": "public",
-      "values": ["swap", "drop"]
+      "values": [
+        "swap",
+        "drop"
+      ]
     },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": ["admin", "manager", "staff"]
+      "values": [
+        "admin",
+        "manager",
+        "staff"
+      ]
     }
   },
   "schemas": {},
