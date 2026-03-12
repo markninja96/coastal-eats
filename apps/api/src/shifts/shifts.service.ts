@@ -11,6 +11,7 @@ import { db } from '../db/db';
 import {
   availabilityExceptions,
   availabilityWindows,
+  locations,
   managerLocations,
   skills,
   shiftAssignments,
@@ -77,6 +78,17 @@ export class ShiftsService {
       return;
     }
     throw new ForbiddenException('Staff cannot manage shifts');
+  }
+
+  private async assertLocationExists(dbClient: DbClient, locationId: string) {
+    const [row] = await dbClient
+      .select({ id: locations.id })
+      .from(locations)
+      .where(eq(locations.id, locationId))
+      .limit(1);
+    if (!row) {
+      throw new BadRequestException('Invalid location');
+    }
   }
 
   private assertCutoff(startAt: Date) {
@@ -199,6 +211,7 @@ export class ShiftsService {
 
   async create(user: AuthUser, input: ShiftInput) {
     await this.assertLocationAccess(user, input.locationId);
+    await this.assertLocationExists(this.database, input.locationId);
     this.assertShiftTiming(input.startAt, input.endAt);
     await this.assertSkillExists(input.requiredSkillId);
 
@@ -222,127 +235,132 @@ export class ShiftsService {
   }
 
   async update(user: AuthUser, shiftId: string, input: Partial<ShiftInput>) {
-    const [existing] = await this.database
-      .select()
-      .from(shifts)
-      .where(eq(shifts.id, shiftId))
-      .limit(1);
-    if (!existing) throw new NotFoundException('Shift not found');
+    return this.database.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(shifts)
+        .where(eq(shifts.id, shiftId))
+        .for('update')
+        .limit(1);
+      if (!existing) throw new NotFoundException('Shift not found');
 
-    await this.assertLocationAccess(user, existing.locationId);
-    if (input.locationId && input.locationId !== existing.locationId) {
-      await this.assertLocationAccess(user, input.locationId);
-    }
-
-    const nextStart = input.startAt ?? existing.startAt;
-    const nextEnd = input.endAt ?? existing.endAt;
-    if (existing.status === 'published') {
-      this.assertCutoff(existing.startAt);
-      if (input.startAt) {
-        this.assertCutoff(nextStart);
+      await this.assertLocationAccess(user, existing.locationId);
+      if (input.locationId !== undefined) {
+        await this.assertLocationAccess(user, input.locationId);
+        await this.assertLocationExists(tx, input.locationId);
       }
-    }
-    if (input.startAt || input.endAt) {
-      this.assertShiftTiming(nextStart, nextEnd);
-    }
 
-    if (
-      input.requiredSkillId !== undefined &&
-      input.requiredSkillId !== existing.requiredSkillId
-    ) {
-      await this.assertSkillExists(input.requiredSkillId);
-    }
+      const nextStart = input.startAt ?? existing.startAt;
+      const nextEnd = input.endAt ?? existing.endAt;
+      if (existing.status === 'published') {
+        this.assertCutoff(existing.startAt);
+        if (input.startAt) {
+          this.assertCutoff(nextStart);
+        }
+      }
+      if (input.startAt || input.endAt) {
+        this.assertShiftTiming(nextStart, nextEnd);
+      }
 
-    const assignedStaff = await this.database
-      .select({ staffId: shiftAssignments.staffId })
-      .from(shiftAssignments)
-      .where(
-        and(
-          eq(shiftAssignments.shiftId, shiftId),
-          eq(shiftAssignments.status, 'assigned'),
-        ),
-      );
-    const assignedCount = assignedStaff.length;
-    const nextHeadcount = input.headcount ?? existing.headcount;
-    if (nextHeadcount < assignedCount) {
-      throw new BadRequestException({
-        message: 'Shift update violates constraints',
-        violations: [
-          {
-            code: 'headcount',
-            message: 'Headcount cannot be lower than assigned staff',
-          },
-        ],
-      });
-    }
+      if (
+        input.requiredSkillId !== undefined &&
+        input.requiredSkillId !== existing.requiredSkillId
+      ) {
+        await this.assertSkillExists(input.requiredSkillId);
+      }
 
-    const timingChanged =
-      nextStart.getTime() !== existing.startAt.getTime() ||
-      nextEnd.getTime() !== existing.endAt.getTime();
-    const locationChanged =
-      input.locationId !== undefined &&
-      input.locationId !== existing.locationId;
-    const skillChanged =
-      input.requiredSkillId !== undefined &&
-      input.requiredSkillId !== existing.requiredSkillId;
-    if (timingChanged || locationChanged || skillChanged) {
-      const nextShift = {
-        ...existing,
-        startAt: nextStart,
-        endAt: nextEnd,
-        locationId: input.locationId ?? existing.locationId,
-        requiredSkillId: input.requiredSkillId ?? existing.requiredSkillId,
-        headcount: nextHeadcount,
-      };
-      const assignmentViolations = [] as Array<{
-        staffId: string;
-        violations: ConstraintViolation[];
-      }>;
-      for (const assignment of assignedStaff) {
-        const violations = await this.checkConstraints(
-          this.database,
-          { staffId: assignment.staffId, shift: nextShift },
-          { includeDuplicateCheck: false },
-        );
-        if (violations.length) {
-          assignmentViolations.push({
-            staffId: assignment.staffId,
-            violations,
+      const assignedStaff = await tx
+        .select({ staffId: shiftAssignments.staffId })
+        .from(shiftAssignments)
+        .where(
+          and(
+            eq(shiftAssignments.shiftId, shiftId),
+            eq(shiftAssignments.status, 'assigned'),
+          ),
+        )
+        .for('update');
+      const assignedCount = assignedStaff.length;
+      const nextHeadcount = input.headcount ?? existing.headcount;
+      if (nextHeadcount < assignedCount) {
+        throw new BadRequestException({
+          message: 'Shift update violates constraints',
+          violations: [
+            {
+              code: 'headcount',
+              message: 'Headcount cannot be lower than assigned staff',
+            },
+          ],
+        });
+      }
+
+      const timingChanged =
+        nextStart.getTime() !== existing.startAt.getTime() ||
+        nextEnd.getTime() !== existing.endAt.getTime();
+      const locationChanged =
+        input.locationId !== undefined &&
+        input.locationId !== existing.locationId;
+      const skillChanged =
+        input.requiredSkillId !== undefined &&
+        input.requiredSkillId !== existing.requiredSkillId;
+      if (timingChanged || locationChanged || skillChanged) {
+        const nextShift = {
+          ...existing,
+          startAt: nextStart,
+          endAt: nextEnd,
+          locationId: input.locationId ?? existing.locationId,
+          requiredSkillId: input.requiredSkillId ?? existing.requiredSkillId,
+          headcount: nextHeadcount,
+        };
+        const assignmentViolations = [] as Array<{
+          staffId: string;
+          violations: ConstraintViolation[];
+        }>;
+        for (const assignment of assignedStaff) {
+          const violations = await this.checkConstraints(
+            tx,
+            { staffId: assignment.staffId, shift: nextShift },
+            { includeDuplicateCheck: false },
+          );
+          if (violations.length) {
+            assignmentViolations.push({
+              staffId: assignment.staffId,
+              violations,
+            });
+          }
+        }
+        if (assignmentViolations.length) {
+          throw new BadRequestException({
+            message: 'Shift update violates constraints',
+            violations: assignmentViolations.map((entry) => ({
+              code: 'assignee',
+              message: 'Assigned staff does not meet updated constraints',
+              details: entry,
+            })),
           });
         }
       }
-      if (assignmentViolations.length) {
-        throw new BadRequestException({
-          message: 'Shift update violates constraints',
-          violations: assignmentViolations.map((entry) => ({
-            code: 'assignee',
-            message: 'Assigned staff does not meet updated constraints',
-            details: entry,
-          })),
-        });
-      }
-    }
 
-    const [updated] = await this.database
-      .update(shifts)
-      .set({
-        locationId: input.locationId ?? existing.locationId,
-        startAt: nextStart,
-        endAt: nextEnd,
-        requiredSkillId:
-          input.requiredSkillId !== undefined
-            ? input.requiredSkillId
-            : existing.requiredSkillId,
-        headcount: input.headcount ?? existing.headcount,
-        title: input.title ?? existing.title,
-        notes: input.notes === undefined ? existing.notes : input.notes,
-        updatedBy: user.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(shifts.id, shiftId))
-      .returning();
+      const [updated] = await tx
+        .update(shifts)
+        .set({
+          locationId: input.locationId ?? existing.locationId,
+          startAt: nextStart,
+          endAt: nextEnd,
+          requiredSkillId:
+            input.requiredSkillId !== undefined
+              ? input.requiredSkillId
+              : existing.requiredSkillId,
+          headcount: input.headcount ?? existing.headcount,
+          title: input.title ?? existing.title,
+          notes: input.notes === undefined ? existing.notes : input.notes,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(shifts.id, shiftId))
+        .returning();
 
-    return updated;
+      return updated;
+    });
   }
 
   async publish(user: AuthUser, shiftId: string) {
