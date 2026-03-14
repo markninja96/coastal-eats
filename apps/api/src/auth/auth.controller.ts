@@ -21,13 +21,13 @@ import { GoogleAuthGuard } from './google.guard';
 import { JwtAuthGuard } from './jwt.guard';
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
 });
 
 const registerSchema = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.email(),
   password: z
     .string()
     .min(8)
@@ -50,7 +50,7 @@ export class AuthController {
     if (!parsed.success) {
       throw new BadRequestException({
         message: 'Invalid login payload',
-        issues: parsed.error.flatten(),
+        issues: z.treeifyError(parsed.error),
       });
     }
 
@@ -93,7 +93,7 @@ export class AuthController {
     if (!parsed.success) {
       throw new BadRequestException({
         message: 'Invalid registration payload',
-        issues: parsed.error.flatten(),
+        issues: z.treeifyError(parsed.error),
       });
     }
 
