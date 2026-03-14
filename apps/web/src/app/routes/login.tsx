@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import type { SubmitEventHandler } from 'react';
 import { useState } from 'react';
 import { Navigate, useSearch } from '@tanstack/react-router';
 import { toast } from 'sonner';
@@ -11,14 +11,14 @@ import { ApiError, apiUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
 const loginSchema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email: z.email('Enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 const registerSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
-    email: z.string().email('Enter a valid email'),
+    email: z.email('Enter a valid email'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string().min(8, 'Confirm your password'),
   })
@@ -27,14 +27,15 @@ const registerSchema = z
     path: ['confirmPassword'],
   });
 
-const toFieldErrors = (
-  errors: Record<string, string[] | undefined>,
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(errors)
-      .filter(([, value]) => value?.length)
-      .map(([key, value]) => [key, value?.[0] ?? 'Invalid value']),
-  );
+const toFieldErrors = (issues: z.ZodIssue[]): Record<string, string> => {
+  const fieldErrors: Record<string, string> = {};
+  issues.forEach((issue) => {
+    const field = issue.path[0];
+    if (typeof field !== 'string' || fieldErrors[field]) return;
+    fieldErrors[field] = issue.message;
+  });
+  return fieldErrors;
+};
 
 export function LoginRoute() {
   const {
@@ -73,14 +74,14 @@ export function LoginRoute() {
       : 'Registration failed. Please try again.';
   })();
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
     setFieldErrors({});
     try {
       if (mode === 'login') {
         const parsed = loginSchema.safeParse({ email, password });
         if (!parsed.success) {
-          setFieldErrors(toFieldErrors(parsed.error.flatten().fieldErrors));
+          setFieldErrors(toFieldErrors(parsed.error.issues));
           return;
         }
         await loginWithEmail(email, password);
@@ -93,7 +94,7 @@ export function LoginRoute() {
           confirmPassword,
         });
         if (!parsed.success) {
-          setFieldErrors(toFieldErrors(parsed.error.flatten().fieldErrors));
+          setFieldErrors(toFieldErrors(parsed.error.issues));
           return;
         }
         await registerWithEmail(name, email, password);
