@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Navigate, useSearch } from '@tanstack/react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
-import { MAX_PASSWORD_UTF8_BYTES } from '@coastal-eats/shared';
+import {
+  isPasswordWithinLimit,
+  passwordLimitMessage,
+} from '@coastal-eats/shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { PageHeader } from '../components/page-header';
@@ -12,16 +15,10 @@ import { Button } from '../components/button';
 import { ApiError, apiUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
-const isPasswordWithinLimit = (value: string) =>
-  new TextEncoder().encode(value).length <= MAX_PASSWORD_UTF8_BYTES;
-
 const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
-  .refine(
-    isPasswordWithinLimit,
-    `Password must be at most ${MAX_PASSWORD_UTF8_BYTES} bytes`,
-  );
+  .refine(isPasswordWithinLimit, passwordLimitMessage);
 
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
