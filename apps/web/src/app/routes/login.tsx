@@ -136,7 +136,6 @@ export function LoginRoute() {
                   }`}
                   onClick={() => {
                     setMode('login');
-                    loginForm.reset();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'login'}
@@ -152,7 +151,6 @@ export function LoginRoute() {
                   }`}
                   onClick={() => {
                     setMode('register');
-                    registerForm.reset();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'register'}

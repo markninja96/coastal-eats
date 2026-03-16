@@ -22,7 +22,13 @@ import { JwtAuthGuard } from './jwt.guard';
 
 const loginSchema = z.object({
   email: z.email(),
-  password: z.string().min(8),
+  password: z
+    .string()
+    .min(8)
+    .refine(
+      (password) => Buffer.byteLength(password, 'utf8') <= 72,
+      'Password must be at most 72 bytes',
+    ),
 });
 
 const registerSchema = z.object({
