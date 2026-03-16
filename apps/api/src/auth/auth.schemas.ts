@@ -1,10 +1,12 @@
 import {
-  isPasswordWithinLimit,
-  passwordLimitMessage,
+  isPasswordWithinPolicy,
+  passwordPolicyMessage,
 } from '@coastal-eats/shared';
 import { z } from 'zod';
 
 export const passwordSchema = z
   .string()
-  .min(8)
-  .refine((password) => isPasswordWithinLimit(password), passwordLimitMessage);
+  .refine(
+    (password) => isPasswordWithinPolicy(password),
+    passwordPolicyMessage,
+  );

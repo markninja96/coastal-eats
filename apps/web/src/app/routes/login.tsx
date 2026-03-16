@@ -3,8 +3,8 @@ import { Navigate, useSearch } from '@tanstack/react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
-  isPasswordWithinLimit,
-  passwordLimitMessage,
+  isPasswordWithinPolicy,
+  passwordPolicyMessage,
 } from '@coastal-eats/shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -17,8 +17,7 @@ import { useAuth } from '../lib/auth';
 
 const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
-  .refine(isPasswordWithinLimit, passwordLimitMessage);
+  .refine(isPasswordWithinPolicy, passwordPolicyMessage);
 
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
