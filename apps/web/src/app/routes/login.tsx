@@ -1,6 +1,7 @@
-import type { SubmitEventHandler } from 'react';
 import { useState } from 'react';
 import { Navigate, useSearch } from '@tanstack/react-router';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { PageHeader } from '../components/page-header';
@@ -27,15 +28,8 @@ const registerSchema = z
     path: ['confirmPassword'],
   });
 
-const toFieldErrors = (issues: z.ZodIssue[]): Record<string, string> => {
-  const fieldErrors: Record<string, string> = {};
-  issues.forEach((issue) => {
-    const field = issue.path[0];
-    if (typeof field !== 'string' || fieldErrors[field]) return;
-    fieldErrors[field] = issue.message;
-  });
-  return fieldErrors;
-};
+type LoginFormValues = z.infer<typeof loginSchema>;
+type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function LoginRoute() {
   const {
@@ -49,11 +43,22 @@ export function LoginRoute() {
   } = useAuth();
   const { redirect } = useSearch({ from: '/login' }) as { redirect?: string };
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [name, setName] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const loginForm = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+  const registerForm = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
   const isSubmitting = loginPending || registerPending;
   const isLoginPending = loginPending;
   const isRegisterPending = registerPending;
@@ -74,34 +79,21 @@ export function LoginRoute() {
       : 'Registration failed. Please try again.';
   })();
 
-  const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (event) => {
-    event.preventDefault();
-    setFieldErrors({});
+  const handleLoginSubmit = async (values: LoginFormValues) => {
     try {
-      if (mode === 'login') {
-        const parsed = loginSchema.safeParse({ email, password });
-        if (!parsed.success) {
-          setFieldErrors(toFieldErrors(parsed.error.issues));
-          return;
-        }
-        await loginWithEmail(email, password);
-        toast.success('Signed in');
-      } else {
-        const parsed = registerSchema.safeParse({
-          name,
-          email,
-          password,
-          confirmPassword,
-        });
-        if (!parsed.success) {
-          setFieldErrors(toFieldErrors(parsed.error.issues));
-          return;
-        }
-        await registerWithEmail(name, email, password);
-        toast.success('Account created');
-      }
+      await loginWithEmail(values.email, values.password);
+      toast.success('Signed in');
     } catch {
-      toast.error(mode === 'login' ? 'Sign in failed' : 'Sign up failed');
+      toast.error('Sign in failed');
+    }
+  };
+
+  const handleRegisterSubmit = async (values: RegisterFormValues) => {
+    try {
+      await registerWithEmail(values.name, values.email, values.password);
+      toast.success('Account created');
+    } catch {
+      toast.error('Sign up failed');
     }
   };
 
@@ -132,7 +124,8 @@ export function LoginRoute() {
                   }`}
                   onClick={() => {
                     setMode('login');
-                    setFieldErrors({});
+                    loginForm.reset();
+                    loginForm.clearErrors();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'login'}
@@ -148,7 +141,8 @@ export function LoginRoute() {
                   }`}
                   onClick={() => {
                     setMode('register');
-                    setFieldErrors({});
+                    registerForm.reset();
+                    registerForm.clearErrors();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'register'}
@@ -159,8 +153,80 @@ export function LoginRoute() {
             </div>
           </CardHeader>
           <CardBody className="grid gap-4">
-            <form className="grid gap-4" onSubmit={handleSubmit}>
-              {mode === 'register' ? (
+            {mode === 'login' ? (
+              <form
+                className="grid gap-4"
+                onSubmit={loginForm.handleSubmit(handleLoginSubmit)}
+              >
+                <div className="grid gap-2">
+                  <label htmlFor="login-email" className="text-sm text-ink/70">
+                    Email
+                  </label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="you@coastaleats.com"
+                    autoComplete="email"
+                    required
+                    className={
+                      loginForm.formState.errors.email
+                        ? 'border-rose-300/60 focus-visible:ring-rose-200'
+                        : undefined
+                    }
+                    aria-invalid={
+                      loginForm.formState.errors.email ? true : undefined
+                    }
+                    {...loginForm.register('email')}
+                  />
+                  {loginForm.formState.errors.email?.message ? (
+                    <p className="text-xs text-rose-200">
+                      {loginForm.formState.errors.email.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="login-password"
+                    className="text-sm text-ink/70"
+                  >
+                    Password
+                  </label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    required
+                    className={
+                      loginForm.formState.errors.password
+                        ? 'border-rose-300/60 focus-visible:ring-rose-200'
+                        : undefined
+                    }
+                    aria-invalid={
+                      loginForm.formState.errors.password ? true : undefined
+                    }
+                    {...loginForm.register('password')}
+                  />
+                  {loginForm.formState.errors.password?.message ? (
+                    <p className="text-xs text-rose-200">
+                      {loginForm.formState.errors.password.message}
+                    </p>
+                  ) : null}
+                </div>
+                {error ? (
+                  <p className="rounded-2xl border border-rose-200/30 bg-rose-200/10 px-3 py-2 text-xs text-rose-100">
+                    {error}
+                  </p>
+                ) : null}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isLoginPending ? 'Signing in...' : 'Continue with email'}
+                </Button>
+              </form>
+            ) : (
+              <form
+                className="grid gap-4"
+                onSubmit={registerForm.handleSubmit(handleRegisterSubmit)}
+              >
                 <div className="grid gap-2">
                   <label htmlFor="login-name" className="text-sm text-ink/70">
                     Full name
@@ -169,73 +235,79 @@ export function LoginRoute() {
                     id="login-name"
                     type="text"
                     placeholder="Avery Admin"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
                     autoComplete="name"
                     required
                     className={
-                      fieldErrors.name
+                      registerForm.formState.errors.name
                         ? 'border-rose-300/60 focus-visible:ring-rose-200'
                         : undefined
                     }
-                    aria-invalid={fieldErrors.name ? true : undefined}
+                    aria-invalid={
+                      registerForm.formState.errors.name ? true : undefined
+                    }
+                    {...registerForm.register('name')}
                   />
-                  {fieldErrors.name ? (
-                    <p className="text-xs text-rose-200">{fieldErrors.name}</p>
+                  {registerForm.formState.errors.name?.message ? (
+                    <p className="text-xs text-rose-200">
+                      {registerForm.formState.errors.name.message}
+                    </p>
                   ) : null}
                 </div>
-              ) : null}
-              <div className="grid gap-2">
-                <label htmlFor="login-email" className="text-sm text-ink/70">
-                  Email
-                </label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  placeholder="you@coastaleats.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  autoComplete="email"
-                  required
-                  className={
-                    fieldErrors.email
-                      ? 'border-rose-300/60 focus-visible:ring-rose-200'
-                      : undefined
-                  }
-                  aria-invalid={fieldErrors.email ? true : undefined}
-                />
-                {fieldErrors.email ? (
-                  <p className="text-xs text-rose-200">{fieldErrors.email}</p>
-                ) : null}
-              </div>
-              <div className="grid gap-2">
-                <label htmlFor="login-password" className="text-sm text-ink/70">
-                  Password
-                </label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete={
-                    mode === 'login' ? 'current-password' : 'new-password'
-                  }
-                  required
-                  className={
-                    fieldErrors.password
-                      ? 'border-rose-300/60 focus-visible:ring-rose-200'
-                      : undefined
-                  }
-                  aria-invalid={fieldErrors.password ? true : undefined}
-                />
-                {fieldErrors.password ? (
-                  <p className="text-xs text-rose-200">
-                    {fieldErrors.password}
-                  </p>
-                ) : null}
-              </div>
-              {mode === 'register' ? (
+                <div className="grid gap-2">
+                  <label htmlFor="login-email" className="text-sm text-ink/70">
+                    Email
+                  </label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="you@coastaleats.com"
+                    autoComplete="email"
+                    required
+                    className={
+                      registerForm.formState.errors.email
+                        ? 'border-rose-300/60 focus-visible:ring-rose-200'
+                        : undefined
+                    }
+                    aria-invalid={
+                      registerForm.formState.errors.email ? true : undefined
+                    }
+                    {...registerForm.register('email')}
+                  />
+                  {registerForm.formState.errors.email?.message ? (
+                    <p className="text-xs text-rose-200">
+                      {registerForm.formState.errors.email.message}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid gap-2">
+                  <label
+                    htmlFor="login-password"
+                    className="text-sm text-ink/70"
+                  >
+                    Password
+                  </label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="Enter your password"
+                    autoComplete="new-password"
+                    required
+                    className={
+                      registerForm.formState.errors.password
+                        ? 'border-rose-300/60 focus-visible:ring-rose-200'
+                        : undefined
+                    }
+                    aria-invalid={
+                      registerForm.formState.errors.password ? true : undefined
+                    }
+                    {...registerForm.register('password')}
+                  />
+                  {registerForm.formState.errors.password?.message ? (
+                    <p className="text-xs text-rose-200">
+                      {registerForm.formState.errors.password.message}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="grid gap-2">
                   <label
                     htmlFor="login-confirm-password"
@@ -247,41 +319,36 @@ export function LoginRoute() {
                     id="login-confirm-password"
                     type="password"
                     placeholder="Re-enter password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
                     autoComplete="new-password"
                     required
                     className={
-                      fieldErrors.confirmPassword
+                      registerForm.formState.errors.confirmPassword
                         ? 'border-rose-300/60 focus-visible:ring-rose-200'
                         : undefined
                     }
                     aria-invalid={
-                      fieldErrors.confirmPassword ? true : undefined
+                      registerForm.formState.errors.confirmPassword
+                        ? true
+                        : undefined
                     }
+                    {...registerForm.register('confirmPassword')}
                   />
-                  {fieldErrors.confirmPassword ? (
+                  {registerForm.formState.errors.confirmPassword?.message ? (
                     <p className="text-xs text-rose-200">
-                      {fieldErrors.confirmPassword}
+                      {registerForm.formState.errors.confirmPassword.message}
                     </p>
                   ) : null}
                 </div>
-              ) : null}
-              {error ? (
-                <p className="rounded-2xl border border-rose-200/30 bg-rose-200/10 px-3 py-2 text-xs text-rose-100">
-                  {error}
-                </p>
-              ) : null}
-              <Button type="submit" disabled={isSubmitting}>
-                {mode === 'login'
-                  ? isLoginPending
-                    ? 'Signing in...'
-                    : 'Continue with email'
-                  : isRegisterPending
-                    ? 'Creating account...'
-                    : 'Create account'}
-              </Button>
-            </form>
+                {error ? (
+                  <p className="rounded-2xl border border-rose-200/30 bg-rose-200/10 px-3 py-2 text-xs text-rose-100">
+                    {error}
+                  </p>
+                ) : null}
+                <Button type="submit" disabled={isSubmitting}>
+                  {isRegisterPending ? 'Creating account...' : 'Create account'}
+                </Button>
+              </form>
+            )}
             <div className="flex items-center gap-3 text-xs text-ink/50">
               <span className="h-px flex-1 bg-white/10" />
               or
