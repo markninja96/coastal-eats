@@ -11,17 +11,29 @@ import { Button } from '../components/button';
 import { ApiError, apiUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
+const isPasswordWithinLimit = (value: string) =>
+  new TextEncoder().encode(value).length <= 72;
+
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
 });
 
 const registerSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     email: z.email('Enter a valid email'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string().min(8, 'Confirm your password'),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
+    confirmPassword: z
+      .string()
+      .min(8, 'Confirm your password')
+      .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -125,7 +137,6 @@ export function LoginRoute() {
                   onClick={() => {
                     setMode('login');
                     loginForm.reset();
-                    loginForm.clearErrors();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'login'}
@@ -142,7 +153,6 @@ export function LoginRoute() {
                   onClick={() => {
                     setMode('register');
                     registerForm.reset();
-                    registerForm.clearErrors();
                   }}
                   disabled={isSubmitting}
                   aria-pressed={mode === 'register'}
@@ -228,11 +238,14 @@ export function LoginRoute() {
                 onSubmit={registerForm.handleSubmit(handleRegisterSubmit)}
               >
                 <div className="grid gap-2">
-                  <label htmlFor="login-name" className="text-sm text-ink/70">
+                  <label
+                    htmlFor="register-name"
+                    className="text-sm text-ink/70"
+                  >
                     Full name
                   </label>
                   <Input
-                    id="login-name"
+                    id="register-name"
                     type="text"
                     placeholder="Avery Admin"
                     autoComplete="name"
@@ -254,11 +267,14 @@ export function LoginRoute() {
                   ) : null}
                 </div>
                 <div className="grid gap-2">
-                  <label htmlFor="login-email" className="text-sm text-ink/70">
+                  <label
+                    htmlFor="register-email"
+                    className="text-sm text-ink/70"
+                  >
                     Email
                   </label>
                   <Input
-                    id="login-email"
+                    id="register-email"
                     type="email"
                     placeholder="you@coastaleats.com"
                     autoComplete="email"
@@ -281,13 +297,13 @@ export function LoginRoute() {
                 </div>
                 <div className="grid gap-2">
                   <label
-                    htmlFor="login-password"
+                    htmlFor="register-password"
                     className="text-sm text-ink/70"
                   >
                     Password
                   </label>
                   <Input
-                    id="login-password"
+                    id="register-password"
                     type="password"
                     placeholder="Enter your password"
                     autoComplete="new-password"
@@ -310,13 +326,13 @@ export function LoginRoute() {
                 </div>
                 <div className="grid gap-2">
                   <label
-                    htmlFor="login-confirm-password"
+                    htmlFor="register-confirm-password"
                     className="text-sm text-ink/70"
                   >
                     Confirm password
                   </label>
                   <Input
-                    id="login-confirm-password"
+                    id="register-confirm-password"
                     type="password"
                     placeholder="Re-enter password"
                     autoComplete="new-password"
