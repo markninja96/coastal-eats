@@ -1,0 +1,1 @@
+export const MAX_PASSWORD_UTF8_BYTES = 72;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate, useSearch } from '@tanstack/react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { MAX_PASSWORD_UTF8_BYTES } from '@coastal-eats/shared';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { PageHeader } from '../components/page-header';
@@ -12,12 +13,15 @@ import { ApiError, apiUrl } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
 const isPasswordWithinLimit = (value: string) =>
-  new TextEncoder().encode(value).length <= 72;
+  new TextEncoder().encode(value).length <= MAX_PASSWORD_UTF8_BYTES;
 
 const passwordSchema = z
   .string()
   .min(8, 'Password must be at least 8 characters')
-  .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes');
+  .refine(
+    isPasswordWithinLimit,
+    `Password must be at most ${MAX_PASSWORD_UTF8_BYTES} bytes`,
+  );
 
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
@@ -181,10 +185,15 @@ export function LoginRoute() {
                     aria-invalid={
                       loginForm.formState.errors.email ? true : undefined
                     }
+                    aria-describedby={
+                      loginForm.formState.errors.email
+                        ? 'login-email-error'
+                        : undefined
+                    }
                     {...loginForm.register('email')}
                   />
                   {loginForm.formState.errors.email?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p id="login-email-error" className="text-xs text-rose-200">
                       {loginForm.formState.errors.email.message}
                     </p>
                   ) : null}
@@ -210,10 +219,18 @@ export function LoginRoute() {
                     aria-invalid={
                       loginForm.formState.errors.password ? true : undefined
                     }
+                    aria-describedby={
+                      loginForm.formState.errors.password
+                        ? 'login-password-error'
+                        : undefined
+                    }
                     {...loginForm.register('password')}
                   />
                   {loginForm.formState.errors.password?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p
+                      id="login-password-error"
+                      className="text-xs text-rose-200"
+                    >
                       {loginForm.formState.errors.password.message}
                     </p>
                   ) : null}
@@ -254,10 +271,18 @@ export function LoginRoute() {
                     aria-invalid={
                       registerForm.formState.errors.name ? true : undefined
                     }
+                    aria-describedby={
+                      registerForm.formState.errors.name
+                        ? 'register-name-error'
+                        : undefined
+                    }
                     {...registerForm.register('name')}
                   />
                   {registerForm.formState.errors.name?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p
+                      id="register-name-error"
+                      className="text-xs text-rose-200"
+                    >
                       {registerForm.formState.errors.name.message}
                     </p>
                   ) : null}
@@ -283,10 +308,18 @@ export function LoginRoute() {
                     aria-invalid={
                       registerForm.formState.errors.email ? true : undefined
                     }
+                    aria-describedby={
+                      registerForm.formState.errors.email
+                        ? 'register-email-error'
+                        : undefined
+                    }
                     {...registerForm.register('email')}
                   />
                   {registerForm.formState.errors.email?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p
+                      id="register-email-error"
+                      className="text-xs text-rose-200"
+                    >
                       {registerForm.formState.errors.email.message}
                     </p>
                   ) : null}
@@ -312,10 +345,18 @@ export function LoginRoute() {
                     aria-invalid={
                       registerForm.formState.errors.password ? true : undefined
                     }
+                    aria-describedby={
+                      registerForm.formState.errors.password
+                        ? 'register-password-error'
+                        : undefined
+                    }
                     {...registerForm.register('password')}
                   />
                   {registerForm.formState.errors.password?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p
+                      id="register-password-error"
+                      className="text-xs text-rose-200"
+                    >
                       {registerForm.formState.errors.password.message}
                     </p>
                   ) : null}
@@ -343,10 +384,18 @@ export function LoginRoute() {
                         ? true
                         : undefined
                     }
+                    aria-describedby={
+                      registerForm.formState.errors.confirmPassword
+                        ? 'register-confirm-password-error'
+                        : undefined
+                    }
                     {...registerForm.register('confirmPassword')}
                   />
                   {registerForm.formState.errors.confirmPassword?.message ? (
-                    <p className="text-xs text-rose-200">
+                    <p
+                      id="register-confirm-password-error"
+                      className="text-xs text-rose-200"
+                    >
                       {registerForm.formState.errors.confirmPassword.message}
                     </p>
                   ) : null}
