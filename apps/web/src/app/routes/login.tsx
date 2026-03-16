@@ -30,10 +30,7 @@ const registerSchema = z
       .string()
       .min(8, 'Password must be at least 8 characters')
       .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
-    confirmPassword: z
-      .string()
-      .min(8, 'Confirm your password')
-      .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
+    confirmPassword: z.string().min(8, 'Confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',

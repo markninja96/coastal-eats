@@ -20,27 +20,23 @@ import {
 import { GoogleAuthGuard } from './google.guard';
 import { JwtAuthGuard } from './jwt.guard';
 
+export const passwordSchema = z
+  .string()
+  .min(8)
+  .refine(
+    (password) => Buffer.byteLength(password, 'utf8') <= 72,
+    'password must be at most 72 bytes when UTF-8 encoded',
+  );
+
 const loginSchema = z.object({
   email: z.email(),
-  password: z
-    .string()
-    .min(8)
-    .refine(
-      (password) => Buffer.byteLength(password, 'utf8') <= 72,
-      'Password must be at most 72 bytes',
-    ),
+  password: passwordSchema,
 });
 
 const registerSchema = z.object({
   name: z.string().min(2),
   email: z.email(),
-  password: z
-    .string()
-    .min(8)
-    .refine(
-      (password) => Buffer.byteLength(password, 'utf8') <= 72,
-      'password must be at most 72 bytes when UTF-8 encoded',
-    ),
+  password: passwordSchema,
 });
 
 @Controller('auth')
