@@ -14,22 +14,21 @@ import { useAuth } from '../lib/auth';
 const isPasswordWithinLimit = (value: string) =>
   new TextEncoder().encode(value).length <= 72;
 
+const passwordSchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes');
+
 const loginSchema = z.object({
   email: z.email('Enter a valid email'),
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
+  password: passwordSchema,
 });
 
 const registerSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
     email: z.email('Enter a valid email'),
-    password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .refine(isPasswordWithinLimit, 'Password must be at most 72 bytes'),
+    password: passwordSchema,
     confirmPassword: z.string().min(8, 'Confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -161,6 +160,7 @@ export function LoginRoute() {
             {mode === 'login' ? (
               <form
                 className="grid gap-4"
+                noValidate
                 onSubmit={loginForm.handleSubmit(handleLoginSubmit)}
               >
                 <div className="grid gap-2">
@@ -230,6 +230,7 @@ export function LoginRoute() {
             ) : (
               <form
                 className="grid gap-4"
+                noValidate
                 onSubmit={registerForm.handleSubmit(handleRegisterSubmit)}
               >
                 <div className="grid gap-2">
