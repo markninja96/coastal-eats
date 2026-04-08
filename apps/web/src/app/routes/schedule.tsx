@@ -6,7 +6,6 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { PageHeader } from '../components/page-header';
-import { WeeklyGrid } from '../components/weekly-grid';
 import { ShiftCard } from '../components/shift-card';
 import { Button } from '../components/button';
 import { Card, CardBody, CardHeader } from '../components/card';
@@ -43,10 +42,50 @@ import {
   type ShiftStaff,
   type ShiftInput,
 } from '../lib/shifts';
-
-const WEEKLY_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+import FullCalendar from '@fullcalendar/react';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
 
 const toDateInput = (value: Date) => value.toLocaleDateString('en-CA');
+
+type CalendarEventStatus = 'draft' | 'published';
+
+type CalendarEventExtendedProps = {
+  meta?: string;
+  status?: CalendarEventStatus;
+};
+
+type CalendarClassNamesArg = {
+  event: {
+    extendedProps: CalendarEventExtendedProps;
+  };
+};
+
+type CalendarContentArg = {
+  event: {
+    title: string;
+    startStr: string;
+    endStr: string;
+    extendedProps: CalendarEventExtendedProps;
+  };
+  timeText: string;
+};
+
+const buildEventTooltip = (input: {
+  title: string;
+  start: string;
+  end: string;
+  meta?: string;
+  timeZone: string;
+}) => {
+  const dateLabel = formatShiftDate(input.start, input.timeZone);
+  const timeRange = `${formatTime(input.start, input.timeZone)} - ${formatTime(
+    input.end,
+    input.timeZone,
+  )}`;
+  const details = [input.title, dateLabel, timeRange, input.meta].join(' · ');
+  return details;
+};
 
 const toDateTimeInput = (value: Date) => {
   const pad = (input: number) => String(input).padStart(2, '0');
@@ -206,11 +245,6 @@ const formatTime = (value: string, timeZone: string) =>
     timeZone,
   }).format(new Date(value));
 
-const formatDay = (value: string, timeZone: string) =>
-  new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(
-    new Date(value),
-  );
-
 const formatShiftDate = (value: string, timeZone: string) =>
   new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -311,6 +345,15 @@ export function ScheduleRoute() {
     title: '',
     notes: '',
   });
+  const [compactEvents, setCompactEvents] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState<{
+    id: string;
+    title: string;
+    start: string;
+    end: string;
+    meta?: string;
+    status?: CalendarEventStatus;
+  } | null>(null);
   const [showValidation, setShowValidation] = useState(false);
   const [lastCreateWarning, setLastCreateWarning] = useState('');
   const [createError, setCreateError] = useState('');
@@ -538,18 +581,27 @@ export function ScheduleRoute() {
     });
     return map;
   }, [shifts, staffAvailabilityQueries]);
-  const shiftBlocks = shifts.map((shift) => {
-    const assignedCount = shift.assignments?.length ?? 0;
-    return {
-      id: shift.id,
-      day: formatDay(shift.startAt, activeTimezone),
-      start: formatTime(shift.startAt, activeTimezone),
-      end: formatTime(shift.endAt, activeTimezone),
-      title: shift.title || 'Shift',
-      meta: `${assignedCount} of ${shift.headcount} filled`,
-      status: shift.status,
-    };
-  });
+  const calendarEvents = useMemo(
+    () =>
+      shifts.map((shift) => {
+        const assignedCount = shift.assignments?.length ?? 0;
+        return {
+          id: shift.id,
+          title: shift.title || 'Shift',
+          start: shift.startAt,
+          end: shift.endAt,
+          extendedProps: {
+            meta: `${assignedCount} of ${shift.headcount} filled`,
+            status: shift.status,
+          },
+        };
+      }),
+    [shifts],
+  );
+  const calendarRange = useMemo(() => {
+    if (!weekStartIso || !weekEndIso) return null;
+    return { start: weekStartIso, end: weekEndIso };
+  }, [weekStartIso, weekEndIso]);
 
   const draftShifts = shifts.filter((shift) => shift.status === 'draft');
   const publishWeekDisabled =
@@ -607,7 +659,8 @@ export function ScheduleRoute() {
               result.status === 'rejected' && result.reason instanceof Error
                 ? result.reason.message
                 : 'Unknown error';
-            return `${shift.id}: ${reason}`;
+            console.log(reason);
+            return `${shift.title}: ${reason}`;
           })
           .join('; ');
         setPublishError(`Failed to publish shifts: ${details}`);
@@ -633,10 +686,20 @@ export function ScheduleRoute() {
   const createTitleId = 'create-shift-title';
   const createNotesId = 'create-shift-notes';
 
+  console.log(calendarEvents);
+
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Scheduling"
+        eyebrow={`Scheduling ${
+          activeLocation?.name
+            ? `[${activeLocation.name} ·
+        ${formatTimezoneDisplay(
+          activeLocation.timezone,
+          weekStartDate ?? undefined,
+        )}]`
+            : ''
+        }`}
         title="Weekly schedule"
         subtitle="Build, publish, and adjust shifts with live conflict checks."
         actions={
@@ -656,7 +719,7 @@ export function ScheduleRoute() {
         <CardHeader>
           <h2 className="font-display text-2xl">Filters</h2>
         </CardHeader>
-        <CardBody className="grid gap-4 md:grid-cols-3">
+        <CardBody className="grid gap-4 md:grid-cols-4">
           <div className="space-y-2">
             <label
               htmlFor={locationSelectId}
@@ -701,6 +764,19 @@ export function ScheduleRoute() {
               value={weekStart}
               onChange={(event) => setWeekStart(event.target.value)}
             />
+          </div>
+          <div className="space-y-2">
+            <span className="text-xs uppercase tracking-[0.2em] text-ink/50">
+              Event density
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-center"
+              onClick={() => setCompactEvents((prev) => !prev)}
+            >
+              {compactEvents ? 'Compact' : 'Comfort'}
+            </Button>
           </div>
         </CardBody>
       </Card>
@@ -894,10 +970,203 @@ export function ScheduleRoute() {
 
       <Card>
         <CardHeader>
-          <h2 className="font-display text-2xl">Week of {weekLabel}</h2>
+          <div>
+            <h2 className="font-display text-2xl">Week of {weekLabel}</h2>
+            <p className="bg-sand/60 text-ink/70">Local time</p>
+          </div>
         </CardHeader>
         <CardBody>
-          <WeeklyGrid days={WEEKLY_DAYS} shifts={shiftBlocks} />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="rounded-3xl border border-white/10 bg-mist/80 p-2">
+              <FullCalendar
+                key={weekStartDate ? weekStartDate.toISOString() : 'week'}
+                plugins={[timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                eventDisplay="block"
+                initialDate={weekStartIso || undefined}
+                visibleRange={calendarRange ?? undefined}
+                events={calendarEvents}
+                timeZone={'local'}
+                firstDay={1}
+                allDaySlot={false}
+                height="auto"
+                expandRows
+                nowIndicator
+                headerToolbar={false}
+                dayHeaderFormat={{
+                  weekday: 'short',
+                  day: 'numeric',
+                  month: 'short',
+                }}
+                slotLabelFormat={{
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  meridiem: 'short',
+                }}
+                eventClassNames={(arg: CalendarClassNamesArg) => {
+                  const status = arg.event.extendedProps.status;
+                  const base =
+                    'rounded-2xl border border-white/10 bg-sand/70 text-ink/90';
+                  if (status === 'published') {
+                    return [base, 'border-coral/40 bg-coral/10'];
+                  }
+                  return [base];
+                }}
+                eventContent={(eventInfo: CalendarContentArg) => {
+                  const meta = eventInfo.event.extendedProps.meta as
+                    | string
+                    | undefined;
+                  const start = eventInfo.event.startStr;
+                  const end = eventInfo.event.endStr;
+                  const tooltip =
+                    start && end
+                      ? buildEventTooltip({
+                          title: eventInfo.event.title,
+                          start,
+                          end,
+                          meta,
+                          timeZone: activeTimezone,
+                        })
+                      : undefined;
+                  if (compactEvents) {
+                    return (
+                      <div className="px-2 py-1" title={tooltip}>
+                        <p className="text-xs font-semibold text-ink">
+                          {eventInfo.event.title}
+                        </p>
+                        <p className="text-[11px] text-ink/60">
+                          {`${eventInfo.timeText} (local time)`}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-1 px-2 py-1" title={tooltip}>
+                      <p className="text-xs font-semibold text-ink">
+                        {eventInfo.event.title}
+                      </p>
+                      <p className="text-[11px] text-ink/60">
+                        {`${eventInfo.timeText} (local time)`}
+                      </p>
+                      {meta ? (
+                        <p className="text-[11px] text-ink/50">{meta}</p>
+                      ) : null}
+                    </div>
+                  );
+                }}
+                eventDidMount={(info) => {
+                  const start = info.event.startStr;
+                  const end = info.event.endStr;
+                  if (!start || !end) return;
+                  const meta = info.event.extendedProps
+                    .meta as CalendarEventExtendedProps['meta'];
+                  const tooltip = buildEventTooltip({
+                    title: info.event.title,
+                    start,
+                    end,
+                    meta,
+                    timeZone: activeTimezone,
+                  });
+                  info.el.setAttribute('title', tooltip);
+                  info.el.setAttribute('aria-label', tooltip);
+                  info.el.querySelectorAll('[title]').forEach((node) => {
+                    if (node instanceof HTMLElement) {
+                      node.setAttribute('title', tooltip);
+                    }
+                  });
+                  const timeNode = info.el.querySelector('.fc-event-time');
+                  if (timeNode instanceof HTMLElement) {
+                    timeNode.setAttribute('title', tooltip);
+                  }
+                  const titleNode = info.el.querySelector('.fc-event-title');
+                  if (titleNode instanceof HTMLElement) {
+                    titleNode.setAttribute('title', tooltip);
+                  }
+                }}
+                eventClick={(info) => {
+                  const start = info.event.startStr;
+                  const end = info.event.endStr;
+                  setSelectedEvent({
+                    id: info.event.id,
+                    title: info.event.title,
+                    start,
+                    end,
+                    meta: info.event.extendedProps
+                      .meta as CalendarEventExtendedProps['meta'],
+                    status: info.event.extendedProps
+                      .status as CalendarEventExtendedProps['status'],
+                  });
+                }}
+              />
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-mist/80 p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-[0.2em] text-ink/50">
+                  Shift preview
+                </p>
+                {selectedEvent ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-ink/60"
+                    onClick={() => setSelectedEvent(null)}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+              {selectedEvent ? (
+                <div className="mt-4 space-y-3 text-sm text-ink/80">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink/40">
+                      Title
+                    </p>
+                    <p className="font-semibold text-ink">
+                      {selectedEvent.title}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink/40">
+                      When
+                    </p>
+                    <p>
+                      {formatShiftDate(selectedEvent.start, activeTimezone)} ·{' '}
+                      {formatTime(selectedEvent.start, activeTimezone)} -{' '}
+                      {formatTime(selectedEvent.end, activeTimezone)}
+                    </p>
+                  </div>
+                  {selectedEvent.meta ? (
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-ink/40">
+                        Staffing
+                      </p>
+                      <p>{selectedEvent.meta}</p>
+                    </div>
+                  ) : null}
+                  {selectedEvent.status ? (
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-ink/40">
+                        Status
+                      </p>
+                      <Badge
+                        className={
+                          selectedEvent.status === 'published'
+                            ? 'bg-coral/20 text-coral'
+                            : 'bg-sand/60 text-ink/70'
+                        }
+                      >
+                        {selectedEvent.status}
+                      </Badge>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-ink/50">
+                  Click a shift to see details.
+                </p>
+              )}
+            </div>
+          </div>
         </CardBody>
       </Card>
 

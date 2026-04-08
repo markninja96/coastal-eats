@@ -25,9 +25,9 @@ import {
   WARN_DURATION_MINUTES,
 } from './shifts.constants';
 
-const idSchema = z.string().uuid();
+const idSchema = z.uuid();
 const assignmentSchema = z.object({
-  staffId: z.string().uuid(),
+  staffId: z.uuid(),
 });
 
 type ShiftWarning = {
@@ -44,10 +44,10 @@ const getShiftWarnings = (startAt: Date, endAt: Date): ShiftWarning[] => {
 };
 
 const shiftInputBaseSchema = z.object({
-  locationId: z.string().uuid(),
+  locationId: z.uuid(),
   startAt: z.coerce.date(),
   endAt: z.coerce.date(),
-  requiredSkillId: z.string().uuid(),
+  requiredSkillId: z.uuid(),
   headcount: z.number().int().positive(),
   title: z.string().min(1),
   notes: z.string().nullable().optional(),
@@ -57,7 +57,7 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
   const minStart = Date.now() + MIN_START_MINUTES * 60000;
   if (data.startAt.getTime() < minStart) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['startAt'],
       message: getShiftMinStartMessage(),
     });
@@ -66,7 +66,7 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
   const diffMinutes = (data.endAt.getTime() - data.startAt.getTime()) / 60000;
   if (diffMinutes <= 0) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['endAt'],
       message: 'Shift end must be after start.',
     });
@@ -74,14 +74,14 @@ const shiftInputSchema = shiftInputBaseSchema.superRefine((data, ctx) => {
   }
   if (diffMinutes < MIN_DURATION_MINUTES) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['endAt'],
       message: getShiftMinDurationMessage(),
     });
   }
   if (diffMinutes > MAX_DURATION_MINUTES) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: 'custom',
       path: ['endAt'],
       message: getShiftMaxDurationMessage(),
     });
@@ -95,7 +95,7 @@ const shiftUpdateSchema = shiftInputBaseSchema
     const minStart = Date.now() + MIN_START_MINUTES * 60000;
     if (data.startAt.getTime() < minStart) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['startAt'],
         message: getShiftMinStartMessage(),
       });
@@ -104,7 +104,7 @@ const shiftUpdateSchema = shiftInputBaseSchema
     const diffMinutes = (data.endAt.getTime() - data.startAt.getTime()) / 60000;
     if (diffMinutes <= 0) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['endAt'],
         message: 'Shift end must be after start.',
       });
@@ -112,14 +112,14 @@ const shiftUpdateSchema = shiftInputBaseSchema
     }
     if (diffMinutes < MIN_DURATION_MINUTES) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['endAt'],
         message: getShiftMinDurationMessage(),
       });
     }
     if (diffMinutes > MAX_DURATION_MINUTES) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['endAt'],
         message: getShiftMaxDurationMessage(),
       });
@@ -127,7 +127,7 @@ const shiftUpdateSchema = shiftInputBaseSchema
   });
 
 const listSchema = z.object({
-  locationId: z.string().uuid().optional(),
+  locationId: z.uuid().optional(),
   start: z.coerce.date().optional(),
   end: z.coerce.date().optional(),
 });
@@ -141,7 +141,9 @@ export class ShiftsController {
   async list(@Req() req: { user: AuthUser }, @Query() query: unknown) {
     const parsed = listSchema.safeParse(query);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     return this.shiftsService.list(req.user, parsed.data);
   }
@@ -150,7 +152,9 @@ export class ShiftsController {
   async create(@Req() req: { user: AuthUser }, @Body() body: unknown) {
     const parsed = shiftInputSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     const shift = await this.shiftsService.create(req.user, parsed.data);
     return {
@@ -171,7 +175,9 @@ export class ShiftsController {
     }
     const parsed = shiftUpdateSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     return this.shiftsService.update(req.user, idParsed.data, parsed.data);
   }
@@ -206,7 +212,9 @@ export class ShiftsController {
     }
     const parsed = assignmentSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     return this.shiftsService.assign(
       req.user,

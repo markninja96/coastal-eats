@@ -1,4 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/*@import '@fullcalendar/core/index.css';*/
+/*@import '@fullcalendar/daygrid/index.css';*/
+/*@import '@fullcalendar/timegrid/index.css';*/
 @import 'tailwindcss';
 
 :root {
@@ -50,4 +53,30 @@ body {
 
 .shadow-soft {
   box-shadow: 0 14px 36px rgba(5, 8, 12, 0.45);
+}
+
+.fc {
+  color: rgb(var(--ink));
+}
+
+.fc .fc-col-header-cell {
+  background: rgba(12, 16, 24, 0.75);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.fc .fc-col-header-cell-cushion {
+  color: rgba(240, 240, 240, 0.9);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fc .fc-timegrid-axis-cushion,
+.fc .fc-timegrid-slot-label-cushion {
+  color: rgba(240, 240, 240, 0.85);
+  font-weight: 600;
+}
+
+.fc .fc-event {
+  cursor: pointer;
 }

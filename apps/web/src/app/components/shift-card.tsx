@@ -83,7 +83,7 @@ export function ShiftCard({
         {actions ? (
           // Keeps action controls aligned across shift cards.
           <div
-            className="w-full md:ml-auto md:w-[var(--actions-width)] md:shrink-0"
+            className="w-full md:ml-auto md:w-(--actions-width) md:shrink-0"
             style={{ '--actions-width': ACTIONS_WIDTH } as React.CSSProperties}
           >
             {actions}

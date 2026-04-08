@@ -34,7 +34,9 @@ export class LocationsController {
   async create(@Req() req: { user: AuthUser }, @Body() body: unknown) {
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     return this.locationsService.create(req.user, parsed.data);
   }

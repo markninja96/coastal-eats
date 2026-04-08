@@ -5,4 +5,5 @@ export const isPasswordWithinPolicy = (value: string) =>
   value.length >= MIN_PASSWORD_CHARS &&
   new TextEncoder().encode(value).length <= MAX_PASSWORD_UTF8_BYTES;
 
-export const passwordPolicyMessage = `Password must be at least ${MIN_PASSWORD_CHARS} characters and short enough to fit our maximum length (up to ${MAX_PASSWORD_UTF8_BYTES} characters' worth of storage; some symbols like emoji count as more than one character).`;
+// Note: MAX_PASSWORD_UTF8_BYTES (72) is the bcrypt limit for UTF-8 encoded passwords
+export const passwordPolicyMessage = `Password must be at least ${MIN_PASSWORD_CHARS} characters. Using many emoji or special characters may shorten the effective limit.`;
