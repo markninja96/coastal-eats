@@ -659,7 +659,6 @@ export function ScheduleRoute() {
               result.status === 'rejected' && result.reason instanceof Error
                 ? result.reason.message
                 : 'Unknown error';
-            console.log(reason);
             return `${shift.title}: ${reason}`;
           })
           .join('; ');
@@ -685,8 +684,6 @@ export function ScheduleRoute() {
   const createSkillId = 'create-shift-skill';
   const createTitleId = 'create-shift-title';
   const createNotesId = 'create-shift-notes';
-
-  console.log(calendarEvents);
 
   return (
     <div className="space-y-8">
