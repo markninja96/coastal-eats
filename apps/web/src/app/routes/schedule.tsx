@@ -1066,19 +1066,6 @@ export function ScheduleRoute() {
                   });
                   info.el.setAttribute('title', tooltip);
                   info.el.setAttribute('aria-label', tooltip);
-                  info.el.querySelectorAll('[title]').forEach((node) => {
-                    if (node instanceof HTMLElement) {
-                      node.setAttribute('title', tooltip);
-                    }
-                  });
-                  const timeNode = info.el.querySelector('.fc-event-time');
-                  if (timeNode instanceof HTMLElement) {
-                    timeNode.setAttribute('title', tooltip);
-                  }
-                  const titleNode = info.el.querySelector('.fc-event-title');
-                  if (titleNode instanceof HTMLElement) {
-                    titleNode.setAttribute('title', tooltip);
-                  }
                 }}
                 eventClick={(info) => {
                   const start = info.event.startStr;

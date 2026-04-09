@@ -12,7 +12,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { StaffService } from './staff.service';
 
 const listSchema = z.object({
-  locationId: z.string().uuid().optional(),
+  locationId: z.uuid().optional(),
 });
 
 @Controller('staff')
