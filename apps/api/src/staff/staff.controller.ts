@@ -12,7 +12,7 @@ import type { AuthUser } from '../auth/auth.types';
 import { StaffService } from './staff.service';
 
 const listSchema = z.object({
-  locationId: z.string().uuid().optional(),
+  locationId: z.uuid().optional(),
 });
 
 @Controller('staff')
@@ -24,7 +24,9 @@ export class StaffController {
   async list(@Req() req: { user: AuthUser }, @Query() query: unknown) {
     const parsed = listSchema.safeParse(query);
     if (!parsed.success) {
-      throw new BadRequestException(parsed.error.flatten());
+      throw new BadRequestException(
+        parsed.error.flatten((issue) => issue.message),
+      );
     }
     return this.staffService.list(req.user, parsed.data.locationId);
   }
