@@ -1,7 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-/*@import '@fullcalendar/core/index.css';*/
-/*@import '@fullcalendar/daygrid/index.css';*/
-/*@import '@fullcalendar/timegrid/index.css';*/
 @import 'tailwindcss';
 
 :root {
