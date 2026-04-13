@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createFileRoute } from '@tanstack/react-router';
 import {
   useMutation,
   useQueries,
@@ -328,6 +329,10 @@ const getShiftValidation = (
 
   return { errors, warnings };
 };
+
+export const Route = createFileRoute('/schedule')({
+  component: ScheduleRoute,
+});
 
 export function ScheduleRoute() {
   const { status } = useAuth();

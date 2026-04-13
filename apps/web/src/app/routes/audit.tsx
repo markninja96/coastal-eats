@@ -1,3 +1,4 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { Badge } from '../components/badge';
@@ -23,6 +24,10 @@ const auditRows = [
     time: 'Mar 1, 6:40 PM',
   },
 ];
+
+export const Route = createFileRoute('/audit')({
+  component: AuditRoute,
+});
 
 export function AuditRoute() {
   return (

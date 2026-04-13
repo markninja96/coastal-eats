@@ -1,8 +1,13 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { NotificationItem } from '../components/notification-item';
 import { LiveIndicator } from '../components/live-indicator';
 import { Button } from '../components/button';
+
+export const Route = createFileRoute('/notifications')({
+  component: NotificationsRoute,
+});
 
 export function NotificationsRoute() {
   return (

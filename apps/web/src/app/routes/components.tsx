@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader } from '../components/card';
 import { ConflictBanner } from '../components/conflict-banner';
 import { InlineAlert } from '../components/inline-alert';
 import { Input } from '../components/input';
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { StatCard } from '../components/stat-card';
 import { Textarea } from '../components/textarea';
@@ -24,6 +25,10 @@ import { PremiumShiftTag } from '../components/premium-shift-tag';
 import { PresenceList } from '../components/presence-list';
 import { SwapRequestCard } from '../components/swap-request-card';
 import { ShiftCard } from '../components/shift-card';
+
+export const Route = createFileRoute('/components')({
+  component: ComponentsRoute,
+});
 
 export function ComponentsRoute() {
   const shiftTitleId = React.useId();

@@ -1,9 +1,14 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { SwapRequestCard } from '../components/swap-request-card';
 import { ApprovalActions } from '../components/approval-actions';
 import { CountdownTag } from '../components/countdown-tag';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { Button } from '../components/button';
+
+export const Route = createFileRoute('/swaps')({
+  component: SwapsRoute,
+});
 
 export function SwapsRoute() {
   return (

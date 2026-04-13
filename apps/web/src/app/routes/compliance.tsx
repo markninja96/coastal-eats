@@ -1,8 +1,13 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { OvertimeMeter } from '../components/overtime-meter';
 import { InlineAlert } from '../components/inline-alert';
 import { Button } from '../components/button';
+
+export const Route = createFileRoute('/compliance')({
+  component: ComplianceRoute,
+});
 
 export function ComplianceRoute() {
   return (

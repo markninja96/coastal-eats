@@ -1,9 +1,14 @@
+import { createFileRoute } from '@tanstack/react-router';
 import { PageHeader } from '../components/page-header';
 import { Card, CardBody, CardHeader } from '../components/card';
 import { FairnessScore } from '../components/fairness-score';
 import { HoursBar } from '../components/hours-bar';
 import { PremiumShiftTag } from '../components/premium-shift-tag';
 import { StatCard } from '../components/stat-card';
+
+export const Route = createFileRoute('/fairness')({
+  component: FairnessRoute,
+});
 
 export function FairnessRoute() {
   return (
