@@ -49,7 +49,7 @@ const requireAuth = async ({
   if (!user) {
     throw redirect({
       to: '/login',
-      search: { redirect: location.publicHref },
+      search: { redirect: location.href },
     });
   }
 };
