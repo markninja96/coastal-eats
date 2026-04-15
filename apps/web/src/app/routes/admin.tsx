@@ -65,12 +65,12 @@ export function AdminRoute() {
 
   const locationsQuery = useQuery({
     queryKey: ['locations'],
-    queryFn: () => listLocations(),
+    queryFn: ({ signal }) => listLocations({ signal }),
     enabled: canFetch,
   });
   const skillsQuery = useQuery({
     queryKey: ['skills'],
-    queryFn: () => listSkills(),
+    queryFn: ({ signal }) => listSkills({ signal }),
     enabled: canFetch,
   });
 

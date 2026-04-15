@@ -9,8 +9,10 @@ export type Location = {
   timezone: string;
 };
 
-export async function listLocations() {
-  const response = await apiFetch<Location[]>('/api/locations');
+export async function listLocations(options?: { signal?: AbortSignal }) {
+  const response = await apiFetch<Location[]>('/api/locations', {
+    signal: options?.signal,
+  });
   return response ?? [];
 }
 

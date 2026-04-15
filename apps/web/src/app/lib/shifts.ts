@@ -82,13 +82,18 @@ type ListParams = {
   end?: string;
 };
 
-export async function listShifts(params: ListParams) {
+export async function listShifts(
+  params: ListParams,
+  options?: { signal?: AbortSignal },
+) {
   const query = new URLSearchParams({
     locationId: params.locationId,
     ...(params.start ? { start: params.start } : {}),
     ...(params.end ? { end: params.end } : {}),
   });
-  const response = await apiFetch<Shift[]>(`/api/shifts?${query.toString()}`);
+  const response = await apiFetch<Shift[]>(`/api/shifts?${query.toString()}`, {
+    signal: options?.signal,
+  });
   return response ?? [];
 }
 
@@ -143,10 +148,14 @@ export async function assignShift(shiftId: string, staffId: string) {
   return ensureResponse(response, 'Empty assignment response');
 }
 
-export async function listShiftStaff(shiftId: string) {
+export async function listShiftStaff(
+  shiftId: string,
+  options?: { signal?: AbortSignal },
+) {
   const encodedShiftId = encodeURIComponent(shiftId);
   const response = await apiFetch<ShiftStaff[]>(
     `/api/shifts/${encodedShiftId}/staff`,
+    { signal: options?.signal },
   );
   return response ?? [];
 }

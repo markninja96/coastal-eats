@@ -5,8 +5,10 @@ export type Skill = {
   name: string;
 };
 
-export async function listSkills() {
-  const response = await apiFetch<Skill[]>('/api/skills');
+export async function listSkills(options?: { signal?: AbortSignal }) {
+  const response = await apiFetch<Skill[]>('/api/skills', {
+    signal: options?.signal,
+  });
   return response ?? [];
 }
 

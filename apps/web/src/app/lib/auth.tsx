@@ -148,11 +148,21 @@ export const getAuthQueryOptions = (queryClient: QueryClient) => ({
       if (error instanceof ApiError && error.status === 401) {
         if (useAuthStore.getState().session === sessionSnapshot) {
           useAuthStore.getState().setSession(null);
-          ['locations', 'skills', 'staff', 'shifts', 'shift-staff'].forEach(
-            (key) => {
-              queryClient.removeQueries({ queryKey: [key] });
-            },
+          const scopedKeys = [
+            'locations',
+            'skills',
+            'staff',
+            'shifts',
+            'shift-staff',
+          ];
+          await Promise.all(
+            scopedKeys.map((key) =>
+              queryClient.cancelQueries({ queryKey: [key] }),
+            ),
           );
+          scopedKeys.forEach((key) => {
+            queryClient.removeQueries({ queryKey: [key] });
+          });
         }
         return null;
       }

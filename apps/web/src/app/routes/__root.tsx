@@ -32,7 +32,12 @@ const requireAuth = async ({
   location,
 }: {
   context: RouterContext;
-  location: { pathname: string; search: Record<string, string> | string };
+  location: {
+    href: string;
+    publicHref: string;
+    pathname: string;
+    search: Record<string, string> | string;
+  };
 }) => {
   if (!isProtectedPath(location.pathname)) {
     return;
@@ -42,10 +47,9 @@ const requireAuth = async ({
     staleTime: 0,
   });
   if (!user) {
-    const search = new URLSearchParams(location.search).toString();
     throw redirect({
       to: '/login',
-      search: { redirect: `${location.pathname}${search ? `?${search}` : ''}` },
+      search: { redirect: location.publicHref },
     });
   }
 };

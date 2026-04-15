@@ -370,13 +370,13 @@ export function ScheduleRoute() {
 
   const locationsQuery = useQuery({
     queryKey: ['locations'],
-    queryFn: () => listLocations(),
+    queryFn: ({ signal }) => listLocations({ signal }),
     enabled: canFetch,
   });
 
   const skillsQuery = useQuery({
     queryKey: ['skills'],
-    queryFn: () => listSkills(),
+    queryFn: ({ signal }) => listSkills({ signal }),
     enabled: canFetch,
   });
 
@@ -429,18 +429,21 @@ export function ScheduleRoute() {
 
   const staffQuery = useQuery({
     queryKey: ['staff', activeLocationId],
-    queryFn: () => listStaff(activeLocationId),
+    queryFn: ({ signal }) => listStaff(activeLocationId, { signal }),
     enabled: Boolean(canFetch && activeLocationId),
   });
 
   const shiftsQuery = useQuery({
     queryKey: ['shifts', activeLocationId, weekStartIso, weekEndIso],
-    queryFn: () =>
-      listShifts({
-        locationId: activeLocationId,
-        start: weekStartIso,
-        end: weekEndIso,
-      }),
+    queryFn: ({ signal }) =>
+      listShifts(
+        {
+          locationId: activeLocationId,
+          start: weekStartIso,
+          end: weekEndIso,
+        },
+        { signal },
+      ),
     enabled: Boolean(
       canFetch && activeLocationId && weekStartDate && weekEndDate,
     ),
@@ -556,7 +559,8 @@ export function ScheduleRoute() {
   const staffAvailabilityQueries = useQueries({
     queries: shifts.map((shift) => ({
       queryKey: ['shift-staff', shift.id],
-      queryFn: () => listShiftStaff(shift.id) as Promise<ShiftStaff[]>,
+      queryFn: ({ signal }) =>
+        listShiftStaff(shift.id, { signal }) as Promise<ShiftStaff[]>,
       enabled: Boolean(canFetch && shift.id),
     })),
   });
