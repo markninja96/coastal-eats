@@ -1,4 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { create, type StateCreator } from 'zustand';
 import { ApiError, apiFetch } from './api';
 
@@ -124,45 +128,54 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
 
 const useAuthStore = create<AuthStore>()(authStoreCreator);
 
-function useAuthBootstrap() {
-  const setUser = useAuthStore((state) => state.setUser);
-  const setSession = useAuthStore((state) => state.setSession);
-  const queryClient = useQueryClient();
-
-  return useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      const sessionSnapshot = useAuthStore.getState().session;
-      try {
-        const user = await apiFetch<AuthUser>('/api/auth/me', {
-          method: 'GET',
-        });
-        if (!user) {
-          throw new Error('Empty auth response');
-        }
-        if (useAuthStore.getState().session !== sessionSnapshot) {
-          return null;
-        }
-        setUser(user as AuthUser);
-        return user;
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          if (useAuthStore.getState().session === sessionSnapshot) {
-            setSession(null);
-            ['locations', 'skills', 'staff', 'shifts', 'shift-staff'].forEach(
-              (key) => {
-                queryClient.removeQueries({ queryKey: [key] });
-              },
-            );
-          }
-          return null;
-        }
-        throw error;
+export const getAuthQueryOptions = (queryClient: QueryClient) => ({
+  queryKey: ['auth', 'me'],
+  queryFn: async () => {
+    const sessionSnapshot = useAuthStore.getState().session;
+    try {
+      const user = await apiFetch<AuthUser>('/api/auth/me', {
+        method: 'GET',
+      });
+      if (!user) {
+        throw new Error('Empty auth response');
       }
-    },
-    staleTime: 60_000,
-    retry: 1,
-  });
+      if (useAuthStore.getState().session !== sessionSnapshot) {
+        return null;
+      }
+      useAuthStore.getState().setUser(user as AuthUser);
+      return user;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        if (useAuthStore.getState().session === sessionSnapshot) {
+          useAuthStore.getState().setSession(null);
+          const scopedKeys = [
+            'locations',
+            'skills',
+            'staff',
+            'shifts',
+            'shift-staff',
+          ];
+          await Promise.all(
+            scopedKeys.map((key) =>
+              queryClient.cancelQueries({ queryKey: [key] }),
+            ),
+          );
+          scopedKeys.forEach((key) => {
+            queryClient.removeQueries({ queryKey: [key] });
+          });
+        }
+        return null;
+      }
+      throw error;
+    }
+  },
+  staleTime: 60_000,
+  retry: 1,
+});
+
+function useAuthBootstrap() {
+  const queryClient = useQueryClient();
+  return useQuery(getAuthQueryOptions(queryClient));
 }
 
 export function useAuth(): AuthContextValue {

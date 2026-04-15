@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useSearch } from '@tanstack/react-router';
+import { Navigate, createFileRoute, useSearch } from '@tanstack/react-router';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
@@ -38,6 +38,10 @@ const registerSchema = z
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 type RegisterFormValues = z.infer<typeof registerSchema>;
+
+export const Route = createFileRoute('/login')({
+  component: LoginRoute,
+});
 
 export function LoginRoute() {
   const {

@@ -7,7 +7,7 @@ import {
   Users,
   UserCheck,
 } from 'lucide-react';
-import { useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Badge } from '../components/badge';
 import { Button } from '../components/button';
 import { Card, CardBody, CardHeader } from '../components/card';
@@ -412,6 +412,10 @@ function DashboardLayout({ config }: { config: DashboardConfig }) {
     </div>
   );
 }
+
+export const Route = createFileRoute('/')({
+  component: HomeRoute,
+});
 
 export function HomeRoute() {
   const navigate = useNavigate();

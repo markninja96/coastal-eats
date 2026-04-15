@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createFileRoute } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PageHeader } from '../components/page-header';
@@ -13,6 +14,10 @@ import { createSkill, listSkills } from '../lib/skills';
 import type { CityData } from 'city-timezones';
 import * as cityTimezones from 'city-timezones';
 import { Country } from 'country-state-city';
+
+export const Route = createFileRoute('/admin')({
+  component: AdminRoute,
+});
 
 export function AdminRoute() {
   const { session, status } = useAuth();
@@ -60,12 +65,12 @@ export function AdminRoute() {
 
   const locationsQuery = useQuery({
     queryKey: ['locations'],
-    queryFn: () => listLocations(),
+    queryFn: ({ signal }) => listLocations({ signal }),
     enabled: canFetch,
   });
   const skillsQuery = useQuery({
     queryKey: ['skills'],
-    queryFn: () => listSkills(),
+    queryFn: ({ signal }) => listSkills({ signal }),
     enabled: canFetch,
   });
 

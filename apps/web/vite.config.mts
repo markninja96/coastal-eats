@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import { tanstackRouter } from '@tanstack/router-vite-plugin';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
@@ -21,7 +22,15 @@ export default defineConfig(() => ({
     port: 4200,
     host: 'localhost',
   },
-  plugins: [nxViteTsPaths(), react(), tailwindcss()],
+  plugins: [
+    tanstackRouter({
+      routesDirectory: './src/app/routes',
+      generatedRouteTree: './src/app/routeTree.gen.ts',
+    }),
+    nxViteTsPaths(),
+    react(),
+    tailwindcss(),
+  ],
   // Uncomment this if you are using workers.
   // worker: {
   //  plugins: [],
