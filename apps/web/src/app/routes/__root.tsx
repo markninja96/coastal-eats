@@ -34,9 +34,7 @@ const requireAuth = async ({
   context: RouterContext;
   location: {
     href: string;
-    publicHref: string;
     pathname: string;
-    search: Record<string, string> | string;
   };
 }) => {
   if (!isProtectedPath(location.pathname)) {
