@@ -5,14 +5,17 @@
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import session from 'express-session';
 import passport from 'passport';
+import { COOKIE_SECURITY_DEFAULTS } from './auth/auth.cookies';
 import type { AuthUser } from './auth/auth.types';
 import { UsersService } from './auth/users.service';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.set('trust proxy', 1);
   app.enableCors({
     origin: ['http://localhost:4200', 'https://coastal-eats-iac4.onrender.com'],
     credentials: true,
@@ -23,16 +26,16 @@ async function bootstrap() {
   if (!sessionSecret) {
     throw new Error('SESSION_SECRET must be set');
   }
+  // Intentionally keep express-session on the default MemoryStore because this
+  // session is only used for short-lived Passport/OAuth handoff state. API auth
+  // is persisted via the coastal-eats.auth cookie rather than server
+  // sessions, so we intentionally keep this as a browser-session cookie (no maxAge).
   app.use(
     session({
       secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
-      cookie: {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-      },
+      cookie: { ...COOKIE_SECURITY_DEFAULTS },
     }),
   );
   const usersService = app.get(UsersService);
