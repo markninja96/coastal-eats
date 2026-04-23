@@ -5,6 +5,7 @@
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import session from 'express-session';
 import passport from 'passport';
 import type { AuthUser } from './auth/auth.types';
@@ -12,7 +13,8 @@ import { UsersService } from './auth/users.service';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.set('trust proxy', 1);
   app.enableCors({
     origin: ['http://localhost:4200', 'https://coastal-eats-iac4.onrender.com'],
     credentials: true,
@@ -30,7 +32,7 @@ async function bootstrap() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         secure: process.env.NODE_ENV === 'production',
       },
     }),
