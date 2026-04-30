@@ -32,6 +32,12 @@ export type AuthContextValue = {
   loginError: Error | null;
   registerError: Error | null;
   logout: () => Promise<void>;
+  updateProfile: (input: { name: string }) => Promise<AuthUser>;
+  updatePreferences: (input: { homeTimezone: string }) => Promise<AuthUser>;
+  updatePassword: (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => Promise<void>;
 };
 
 type AuthStore = {
@@ -49,6 +55,12 @@ type AuthStore = {
     password: string,
   ) => Promise<void>;
   clearSession: () => void;
+  updateProfile: (input: { name: string }) => Promise<AuthUser>;
+  updatePreferences: (input: { homeTimezone: string }) => Promise<AuthUser>;
+  updatePassword: (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => Promise<void>;
 };
 
 const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
@@ -124,6 +136,37 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
       loginError: null,
       registerError: null,
     }),
+  updateProfile: async (input: { name: string }) => {
+    const data = await apiFetch<AuthUser>('/api/auth/profile', {
+      method: 'PATCH',
+      body: input,
+    });
+    if (!data) {
+      throw new Error('Empty profile response');
+    }
+    get().setUser(data);
+    return data;
+  },
+  updatePreferences: async (input: { homeTimezone: string }) => {
+    const data = await apiFetch<AuthUser>('/api/auth/preferences', {
+      method: 'PATCH',
+      body: input,
+    });
+    if (!data) {
+      throw new Error('Empty preferences response');
+    }
+    get().setUser(data);
+    return data;
+  },
+  updatePassword: async (input: {
+    currentPassword: string;
+    newPassword: string;
+  }) => {
+    await apiFetch('/api/auth/password', {
+      method: 'PATCH',
+      body: input,
+    });
+  },
 });
 
 const useAuthStore = create<AuthStore>()(authStoreCreator);
@@ -187,6 +230,9 @@ export function useAuth(): AuthContextValue {
   const loginError = useAuthStore((state) => state.loginError);
   const registerError = useAuthStore((state) => state.registerError);
   const clearSession = useAuthStore((state) => state.clearSession);
+  const updateProfile = useAuthStore((state) => state.updateProfile);
+  const updatePreferences = useAuthStore((state) => state.updatePreferences);
+  const updatePassword = useAuthStore((state) => state.updatePassword);
   const bootstrap = useAuthBootstrap();
   const queryClient = useQueryClient();
 
@@ -232,5 +278,8 @@ export function useAuth(): AuthContextValue {
         throw new Error(`Logout failed: ${errorMessage}`);
       }
     },
+    updateProfile,
+    updatePreferences,
+    updatePassword,
   };
 }

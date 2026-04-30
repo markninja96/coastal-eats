@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   Post,
   Req,
   Res,
@@ -30,6 +31,19 @@ const registerSchema = z.object({
   name: z.string().min(2),
   email: z.email(),
   password: passwordSchema,
+});
+
+const updateProfileSchema = z.object({
+  name: z.string().trim().min(2),
+});
+
+const updatePreferencesSchema = z.object({
+  homeTimezone: z.string().trim().min(2),
+});
+
+const updatePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: passwordSchema,
 });
 
 @Controller('auth')
@@ -77,6 +91,45 @@ export class AuthController {
     },
   ) {
     return req.user;
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(@Req() req: { body: unknown; user: { id: string } }) {
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Invalid profile payload',
+        issues: z.treeifyError(parsed.error),
+      });
+    }
+    return this.authService.updateProfile(req.user.id, parsed.data);
+  }
+
+  @Patch('preferences')
+  @UseGuards(JwtAuthGuard)
+  async updatePreferences(@Req() req: { body: unknown; user: { id: string } }) {
+    const parsed = updatePreferencesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Invalid preferences payload',
+        issues: z.treeifyError(parsed.error),
+      });
+    }
+    return this.authService.updatePreferences(req.user.id, parsed.data);
+  }
+
+  @Patch('password')
+  @UseGuards(JwtAuthGuard)
+  async updatePassword(@Req() req: { body: unknown; user: { id: string } }) {
+    const parsed = updatePasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Invalid password payload',
+        issues: z.treeifyError(parsed.error),
+      });
+    }
+    return this.authService.updatePassword(req.user.id, parsed.data);
   }
 
   @Post('register')
