@@ -18,6 +18,18 @@ type LocalUserInput = {
   passwordHash: string;
 };
 
+type UpdateProfileInput = {
+  name: string;
+};
+
+type UpdatePreferencesInput = {
+  homeTimezone: string;
+};
+
+type UpdatePasswordInput = {
+  passwordHash: string;
+};
+
 @Injectable()
 export class UsersService {
   constructor(@Inject(DB) private readonly database: typeof db) {}
@@ -139,6 +151,42 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  async updateProfile(userId: string, input: UpdateProfileInput) {
+    const [updated] = await this.database
+      .update(users)
+      .set({
+        name: input.name,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
+  }
+
+  async updatePreferences(userId: string, input: UpdatePreferencesInput) {
+    const [updated] = await this.database
+      .update(users)
+      .set({
+        homeTimezone: input.homeTimezone,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
+  }
+
+  async updatePassword(userId: string, input: UpdatePasswordInput) {
+    const [updated] = await this.database
+      .update(users)
+      .set({
+        passwordHash: input.passwordHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 
   toSafeUser(user: UserRecord) {

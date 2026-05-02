@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcryptjs';
 import type { Profile } from 'passport-google-oauth20';
@@ -55,6 +59,48 @@ export class AuthService {
     const user = await this.usersService.findById(userId);
     if (!user) throw new UnauthorizedException('User not found');
     return this.usersService.toSafeUser(user);
+  }
+
+  async updateProfile(userId: string, input: { name: string }) {
+    const user = await this.usersService.updateProfile(userId, input);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.usersService.toSafeUser(user);
+  }
+
+  async updatePreferences(userId: string, input: { homeTimezone: string }) {
+    const user = await this.usersService.updatePreferences(userId, input);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.usersService.toSafeUser(user);
+  }
+
+  async updatePassword(
+    userId: string,
+    input: { currentPassword: string; newPassword: string },
+  ) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'Password sign-in is not enabled for this account',
+      );
+    }
+    const isCurrentValid = await compare(
+      input.currentPassword,
+      user.passwordHash,
+    );
+    if (!isCurrentValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+    const passwordHash = await hash(input.newPassword, 10);
+    const updatedUser = await this.usersService.updatePassword(userId, {
+      passwordHash,
+    });
+    if (!updatedUser) {
+      throw new UnauthorizedException('User not found');
+    }
+    return { success: true };
   }
 
   async handleGoogleProfile(profile: Profile) {

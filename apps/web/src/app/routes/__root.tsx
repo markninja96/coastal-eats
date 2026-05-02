@@ -16,6 +16,7 @@ const PROTECTED_PATHS = [
   '/compliance',
   '/fairness',
   '/notifications',
+  '/settings',
   '/audit',
   '/admin',
 ];
@@ -40,15 +41,24 @@ const requireAuth = async ({
   if (!isProtectedPath(location.pathname)) {
     return;
   }
-  const user = await context.queryClient.fetchQuery({
-    ...getAuthQueryOptions(context.queryClient),
-    staleTime: 0,
-  });
-  if (!user) {
-    throw redirect({
-      to: '/login',
-      search: { redirect: location.href },
+  try {
+    const user = await context.queryClient.fetchQuery({
+      ...getAuthQueryOptions(context.queryClient),
+      staleTime: 0,
     });
+    if (!user) {
+      throw redirect({
+        to: '/login',
+        search: { redirect: location.href },
+      });
+    }
+  } catch (error) {
+    // If the browser wakes from a suspended tab and auth revalidation
+    // transiently fails, keep navigation responsive for an existing session.
+    if (context.auth.session?.user) {
+      return;
+    }
+    throw error;
   }
 };
 

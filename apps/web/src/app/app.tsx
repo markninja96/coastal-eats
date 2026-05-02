@@ -13,14 +13,19 @@ type NavItem = {
 };
 
 const PROTECTED_NAV: NavItem[] = [
-  { to: '/', label: 'Overview' },
+  { to: '/', label: 'Home' },
+  { to: '/notifications', label: 'Notifications' },
+  { to: '/settings', label: 'Settings' },
+];
+
+const MANAGEMENT_NAV: NavItem[] = [
   { to: '/schedule', label: 'Schedule' },
   { to: '/swaps', label: 'Swaps' },
   { to: '/compliance', label: 'Compliance' },
   { to: '/fairness', label: 'Fairness' },
-  { to: '/notifications', label: 'Notifications' },
-  { to: '/audit', label: 'Audit' },
 ];
+
+const ADMIN_EXTRA_NAV: NavItem[] = [{ to: '/audit', label: 'Audit' }];
 
 const ADMIN_NAV: NavItem[] = [{ to: '/admin', label: 'Admin' }];
 
@@ -34,10 +39,20 @@ export function AppLayout() {
   });
   const pathname = location.pathname;
   const isLoading = status === 'loading';
+  const role = session?.user?.role;
   const signedInName = session?.user?.name ?? session?.user?.email;
   const protectedRoutes = [
     ...PROTECTED_NAV.map((item) => item.to),
+    ...MANAGEMENT_NAV.map((item) => item.to),
+    ...ADMIN_EXTRA_NAV.map((item) => item.to),
     ...ADMIN_NAV.map((item) => item.to),
+  ];
+  const navItems = [
+    ...(session ? PROTECTED_NAV : []),
+    ...(role === 'manager' || role === 'admin' ? MANAGEMENT_NAV : []),
+    ...(role === 'admin' ? ADMIN_EXTRA_NAV : []),
+    ...(role === 'admin' ? ADMIN_NAV : []),
+    ...PUBLIC_NAV,
   ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     // Prefix match so protected base paths cover nested routes.
@@ -68,11 +83,7 @@ export function AppLayout() {
             </div>
           </Link>
           <nav className="flex flex-wrap items-center gap-3 text-sm text-ink/80 sm:gap-4">
-            {[
-              ...(session ? PROTECTED_NAV : []),
-              ...(session?.user?.role === 'admin' ? ADMIN_NAV : []),
-              ...PUBLIC_NAV,
-            ].map((item) => {
+            {navItems.map((item) => {
               const isActive = pathname === item.to;
               return (
                 <Link

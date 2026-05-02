@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SwapsRouteImport } from './routes/swaps'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ScheduleRouteImport } from './routes/schedule'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
@@ -19,10 +20,19 @@ import { Route as ComplianceRouteImport } from './routes/compliance'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsSecurityRouteImport } from './routes/settings.security'
+import { Route as SettingsProfileRouteImport } from './routes/settings.profile'
+import { Route as SettingsPreferencesRouteImport } from './routes/settings.preferences'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings.notifications'
 
 const SwapsRoute = SwapsRouteImport.update({
   id: '/swaps',
   path: '/swaps',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScheduleRoute = ScheduleRouteImport.update({
@@ -70,6 +80,26 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPreferencesRoute = SettingsPreferencesRouteImport.update({
+  id: '/preferences',
+  path: '/preferences',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => SettingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,7 +111,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/schedule': typeof ScheduleRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/swaps': typeof SwapsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/preferences': typeof SettingsPreferencesRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,7 +128,12 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/schedule': typeof ScheduleRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/swaps': typeof SwapsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/preferences': typeof SettingsPreferencesRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,7 +146,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/notifications': typeof NotificationsRoute
   '/schedule': typeof ScheduleRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/swaps': typeof SwapsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
+  '/settings/preferences': typeof SettingsPreferencesRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +165,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/schedule'
+    | '/settings'
     | '/swaps'
+    | '/settings/notifications'
+    | '/settings/preferences'
+    | '/settings/profile'
+    | '/settings/security'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,7 +182,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/schedule'
+    | '/settings'
     | '/swaps'
+    | '/settings/notifications'
+    | '/settings/preferences'
+    | '/settings/profile'
+    | '/settings/security'
   id:
     | '__root__'
     | '/'
@@ -144,7 +199,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/notifications'
     | '/schedule'
+    | '/settings'
     | '/swaps'
+    | '/settings/notifications'
+    | '/settings/preferences'
+    | '/settings/profile'
+    | '/settings/security'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,6 +217,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   NotificationsRoute: typeof NotificationsRoute
   ScheduleRoute: typeof ScheduleRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SwapsRoute: typeof SwapsRoute
 }
 
@@ -167,6 +228,13 @@ declare module '@tanstack/react-router' {
       path: '/swaps'
       fullPath: '/swaps'
       preLoaderRoute: typeof SwapsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/schedule': {
@@ -232,8 +300,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/security': {
+      id: '/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof SettingsSecurityRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/preferences': {
+      id: '/settings/preferences'
+      path: '/preferences'
+      fullPath: '/settings/preferences'
+      preLoaderRoute: typeof SettingsPreferencesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
   }
 }
+
+interface SettingsRouteChildren {
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  SettingsPreferencesRoute: typeof SettingsPreferencesRoute
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsSecurityRoute: typeof SettingsSecurityRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
+  SettingsPreferencesRoute: SettingsPreferencesRoute,
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsSecurityRoute: SettingsSecurityRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -245,6 +359,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   NotificationsRoute: NotificationsRoute,
   ScheduleRoute: ScheduleRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SwapsRoute: SwapsRoute,
 }
 export const routeTree = rootRouteImport
