@@ -137,6 +137,7 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
       registerError: null,
     }),
   updateProfile: async (input: { name: string }) => {
+    const sessionSnapshot = get().session;
     const data = await apiFetch<AuthUser>('/api/auth/profile', {
       method: 'PATCH',
       body: input,
@@ -144,10 +145,13 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
     if (!data) {
       throw new Error('Empty profile response');
     }
-    get().setUser(data);
+    if (get().session === sessionSnapshot) {
+      get().setUser(data);
+    }
     return data;
   },
   updatePreferences: async (input: { homeTimezone: string }) => {
+    const sessionSnapshot = get().session;
     const data = await apiFetch<AuthUser>('/api/auth/preferences', {
       method: 'PATCH',
       body: input,
@@ -155,7 +159,9 @@ const authStoreCreator: StateCreator<AuthStore, [], []> = (set, get) => ({
     if (!data) {
       throw new Error('Empty preferences response');
     }
-    get().setUser(data);
+    if (get().session === sessionSnapshot) {
+      get().setUser(data);
+    }
     return data;
   },
   updatePassword: async (input: {

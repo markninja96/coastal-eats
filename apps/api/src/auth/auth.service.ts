@@ -94,7 +94,12 @@ export class AuthService {
       throw new UnauthorizedException('Current password is incorrect');
     }
     const passwordHash = await hash(input.newPassword, 10);
-    await this.usersService.updatePassword(userId, { passwordHash });
+    const updatedUser = await this.usersService.updatePassword(userId, {
+      passwordHash,
+    });
+    if (!updatedUser) {
+      throw new UnauthorizedException('User not found');
+    }
     return { success: true };
   }
 

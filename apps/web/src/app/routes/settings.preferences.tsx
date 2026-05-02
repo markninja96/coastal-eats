@@ -107,7 +107,14 @@ function SettingsPreferencesRoute() {
     try {
       setIsSaving(true);
       await updatePreferences({ homeTimezone: values.homeTimezone });
-      localStorage.setItem('coastal-eats.weekStart', values.weekStart);
+      try {
+        localStorage.setItem('coastal-eats.weekStart', values.weekStart);
+      } catch (storageError) {
+        console.warn(
+          'Failed to persist week start preference locally',
+          storageError,
+        );
+      }
       toast.success('Preferences saved.');
       form.reset(values);
     } catch (error) {

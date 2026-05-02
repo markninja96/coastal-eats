@@ -37,9 +37,52 @@ function SettingsProfileRoute() {
       toast.success('Profile updated.');
       form.reset({ name: values.name });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Could not update profile.';
-      toast.error(message);
+      console.error('Failed to update profile', error);
+      const fallbackMessage = 'Could not update profile.';
+      const rawMessage = error instanceof Error ? error.message : '';
+      let friendlyMessage = '';
+      if (rawMessage.startsWith('{') || rawMessage.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(rawMessage) as {
+            message?: unknown;
+            error?: unknown;
+            detail?: unknown;
+            errors?: unknown;
+          };
+          const candidates = [
+            parsed.message,
+            parsed.error,
+            parsed.detail,
+            parsed.errors,
+          ];
+          for (const candidate of candidates) {
+            if (typeof candidate === 'string' && candidate.trim().length > 0) {
+              friendlyMessage = candidate;
+              break;
+            }
+            if (Array.isArray(candidate) && candidate.length > 0) {
+              const [first] = candidate;
+              if (typeof first === 'string' && first.trim().length > 0) {
+                friendlyMessage = first;
+                break;
+              }
+              if (
+                first &&
+                typeof first === 'object' &&
+                'message' in first &&
+                typeof first.message === 'string' &&
+                first.message.trim().length > 0
+              ) {
+                friendlyMessage = first.message;
+                break;
+              }
+            }
+          }
+        } catch {
+          friendlyMessage = '';
+        }
+      }
+      toast.error(friendlyMessage || fallbackMessage);
     } finally {
       setIsSaving(false);
     }
