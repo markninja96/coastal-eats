@@ -133,7 +133,7 @@ function SettingsSecurityRoute() {
           </div>
         </CardBody>
         <CardFooter>
-          <Button variant="secondary" type="submit" disabled={isSaving}>
+          <Button variant="primary" type="submit" disabled={isSaving}>
             {isSaving ? 'Updating...' : 'Update password'}
           </Button>
         </CardFooter>

@@ -17,7 +17,11 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 1);
   app.enableCors({
-    origin: ['http://localhost:4200', 'https://coastal-eats-iac4.onrender.com'],
+    origin: [
+      'http://localhost:4200',
+      'https://coastal-eats-iac4.onrender.com',
+      'https://app.njihiaplayground.space',
+    ],
     credentials: true,
   });
   const globalPrefix = 'api';
