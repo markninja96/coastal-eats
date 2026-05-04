@@ -50,8 +50,8 @@ function SettingsNotificationsRoute() {
           </label>
         ))}
       </CardBody>
-      <CardFooter>
-        <Button variant="secondary">Save preferences</Button>
+      <CardFooter className="mt-4">
+        <Button variant="primary">Save preferences</Button>
       </CardFooter>
     </Card>
   );

@@ -127,7 +127,7 @@ function SettingsProfileRoute() {
           </div>
         </CardBody>
         <CardFooter>
-          <Button variant="secondary" type="submit" disabled={isSaving}>
+          <Button variant="primary" type="submit" disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save changes'}
           </Button>
         </CardFooter>
