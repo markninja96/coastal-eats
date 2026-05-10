@@ -173,7 +173,23 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(204)
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: { session?: { destroy: (callback: (error?: Error) => void) => void } },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (req.session) {
+      await new Promise<void>((resolve, reject) => {
+        req.session?.destroy((error?: Error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+
+    res.clearCookie('connect.sid');
     res.clearCookie(AUTH_COOKIE_NAME, AUTH_COOKIE_OPTIONS);
     return;
   }
