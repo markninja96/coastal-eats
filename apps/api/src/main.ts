@@ -34,6 +34,7 @@ async function bootstrap() {
   }
   const redisUrl = process.env.REDIS_URL;
   const isProduction = process.env.NODE_ENV === 'production';
+  let redisClient: ReturnType<typeof createClient> | undefined;
   const sessionOptions: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
@@ -42,7 +43,7 @@ async function bootstrap() {
   };
 
   if (redisUrl) {
-    const redisClient = createClient({ url: redisUrl });
+    redisClient = createClient({ url: redisUrl });
     redisClient.on('error', (error) => {
       Logger.error(`Redis session client error: ${String(error)}`);
     });
@@ -75,7 +76,17 @@ async function bootstrap() {
   app.use(passport.initialize());
   app.use(passport.session());
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  const server = await app.listen(port);
+  server.on('close', async () => {
+    if (!redisClient) {
+      return;
+    }
+    try {
+      await redisClient.quit();
+    } catch (error) {
+      Logger.error(`Failed to disconnect Redis client: ${String(error)}`);
+    }
+  });
   Logger.log(
     `🚀 Application is running on: http://localhost:${port}/${globalPrefix}`,
   );

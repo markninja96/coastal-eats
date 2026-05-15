@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Logger,
   Patch,
   Post,
   Req,
@@ -178,15 +179,22 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     if (req.session) {
-      await new Promise<void>((resolve, reject) => {
-        req.session?.destroy((error?: Error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          req.session?.destroy((error?: Error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve();
+          });
         });
-      });
+      } catch (error) {
+        Logger.error(
+          `Failed to destroy logout session: ${String(error)}`,
+          'AuthController',
+        );
+      }
     }
 
     res.clearCookie('connect.sid');
