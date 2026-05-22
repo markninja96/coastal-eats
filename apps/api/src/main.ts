@@ -18,7 +18,7 @@ import { AppModule } from './app/app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', true);
   app.enableCors({
     origin: [
       'http://localhost:4200',
