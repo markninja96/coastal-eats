@@ -41,7 +41,7 @@ async function bootstrap() {
     proxy: true,
     resave: false,
     saveUninitialized: false,
-    cookie: { ...COOKIE_SECURITY_DEFAULTS },
+    cookie: { ...COOKIE_SECURITY_DEFAULTS, sameSite: 'lax' },
   };
 
   if (redisUrl) {
