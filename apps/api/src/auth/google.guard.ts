@@ -11,6 +11,24 @@ import { googleOAuthConfigured } from './google.strategy';
 export class GoogleAuthGuard extends AuthGuard('google') {
   private readonly logger = new Logger(GoogleAuthGuard.name);
 
+  private serializeForLog(value: unknown): string {
+    if (value instanceof Error) {
+      return JSON.stringify({
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+      });
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
   override canActivate(context: ExecutionContext) {
     if (!googleOAuthConfigured) {
       throw new BadRequestException('Google OAuth is not configured');
@@ -31,7 +49,7 @@ export class GoogleAuthGuard extends AuthGuard('google') {
     if (err || !user) {
       const request = context.switchToHttp().getRequest<{ originalUrl?: string }>();
       this.logger.warn(
-        `Google OAuth callback failed for ${request.originalUrl ?? '/api/auth/google/callback'}: err=${String(err)} info=${String(info)}`,
+        `Google OAuth callback failed for ${request.originalUrl ?? '/api/auth/google/callback'}: err=${this.serializeForLog(err)} info=${this.serializeForLog(info)}`,
       );
     }
 
