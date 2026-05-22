@@ -38,6 +38,7 @@ async function bootstrap() {
   let redisClient: ReturnType<typeof createClient> | undefined;
   const sessionOptions: session.SessionOptions = {
     secret: sessionSecret,
+    proxy: true,
     resave: false,
     saveUninitialized: false,
     cookie: { ...COOKIE_SECURITY_DEFAULTS },
