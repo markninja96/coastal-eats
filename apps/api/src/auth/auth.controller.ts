@@ -49,8 +49,6 @@ const updatePasswordSchema = z.object({
 
 @Controller('auth')
 export class AuthController {
-  private readonly logger = new Logger(AuthController.name);
-
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
@@ -159,37 +157,16 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(GoogleAuthGuard)
-  async googleAuth(
-    @Req()
-    req: {
-      sessionID?: string;
-      session?: unknown;
-      headers?: { cookie?: string };
-    },
-  ) {
-    const hasSessionCookie = Boolean(req.headers?.cookie?.includes('connect.sid='));
-    this.logger.log(
-      `Google OAuth start: sessionID=${req.sessionID ?? 'none'} hasSession=${Boolean(req.session)} hasConnectSidCookie=${hasSessionCookie}`,
-    );
+  async googleAuth() {
     return;
   }
 
   @Get('google/callback')
   @UseGuards(GoogleAuthGuard)
   async googleCallback(
-    @Req()
-    req: {
-      user: { id: string };
-      sessionID?: string;
-      session?: unknown;
-      headers?: { cookie?: string };
-    },
+    @Req() req: { user: { id: string } },
     @Res() res: Response,
   ) {
-    const hasSessionCookie = Boolean(req.headers?.cookie?.includes('connect.sid='));
-    this.logger.log(
-      `Google OAuth callback: sessionID=${req.sessionID ?? 'none'} hasSession=${Boolean(req.session)} hasConnectSidCookie=${hasSessionCookie}`,
-    );
     const session = await this.authService.login(req.user.id);
     this.setAuthCookie(res, session.token);
     return res.redirect(this.getFrontendRedirectUrl());
